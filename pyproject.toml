@@ -1,0 +1,35 @@
+[project]
+name = "synapse-ai"
+version = "0.1.0"
+description = "Academic NLP and organizational intelligence MVP built with Streamlit."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "streamlit>=1.37,<1.38",
+  "supabase>=2.7,<3",
+  "openai>=1.40,<2",
+  "pypdf>=5.0,<7",
+  "python-docx>=1.1,<2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q -p no:cacheprovider"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py311"
+extend-exclude = [".venv", "work"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "BLE"]
+ignore = []

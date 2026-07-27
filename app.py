@@ -11,6 +11,7 @@ from synapse_ai.ui.home_page import render_home_page
 from synapse_ai.ui.login_page import render_login_page
 from synapse_ai.ui.navigation import private_navigation, public_navigation
 from synapse_ai.ui.register_page import render_register_page
+from synapse_ai.ui.theme import apply_synapse_theme
 from synapse_ai.ui.upload_page import (
     has_google_drive_oauth_return,
     render_google_drive_oauth_return_without_session,
@@ -28,6 +29,7 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
     configure_logging()
+    apply_synapse_theme()
     initialize_session()
 
     try:

@@ -20,11 +20,16 @@ from synapse_ai.services.audit_service import (
     collect_source_references,
 )
 from synapse_ai.services.chunk_repository import list_document_chunks_by_references
+from synapse_ai.ui.theme import render_page_header
 
 
 def render_audit_page(config: AppConfig) -> None:
-    st.title("Auditoria das fontes")
-    st.write("Revise as evidências usadas nas análises salvas e baixe um pacote auditável.")
+    render_page_header(
+        "Trilha de evidências",
+        "Revise documentos, perguntas, respostas, fontes e pacotes auditáveis gerados "
+        "pelo Synapse AI.",
+        "Auditoria",
+    )
 
     user = get_current_session_user()
     if user is None:

@@ -5,12 +5,16 @@ import streamlit as st
 from synapse_ai.auth.auth import register_user
 from synapse_ai.clients.supabase_client import create_supabase_client
 from synapse_ai.config import AppConfig
+from synapse_ai.ui.theme import render_page_header
 from synapse_ai.utils.validation import is_valid_email, passwords_match, validate_password
 
 
 def render_register_page(config: AppConfig) -> None:
-    st.title("Cadastro")
-    st.write("Crie sua conta para acessar as futuras capacidades de inteligência organizacional.")
+    render_page_header(
+        "Cadastro",
+        "Crie sua conta para acessar as capacidades de inteligência organizacional do Synapse AI.",
+        "Novo acesso",
+    )
 
     with st.form("register_form"):
         email = st.text_input("E-mail")

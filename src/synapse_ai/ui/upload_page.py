@@ -58,11 +58,15 @@ from synapse_ai.services.google_oauth_service import (
     generate_pkce_code_verifier,
     store_google_oauth_pending_authorization,
 )
+from synapse_ai.ui.theme import render_page_header
 
 
 def render_upload_page(config: AppConfig) -> None:
-    st.title("Upload de documentos")
-    st.write("Envie documentos organizacionais para extração textual e persistência inicial.")
+    render_page_header(
+        "Ingestão documental",
+        "Envie documentos locais ou conecte fontes corporativas para alimentar a base semântica.",
+        "Upload",
+    )
 
     user = get_current_session_user()
     if user is None:
@@ -207,7 +211,11 @@ def has_google_drive_oauth_return() -> bool:
 
 
 def render_google_drive_oauth_return_without_session(config: AppConfig) -> None:
-    st.title("Conexão com Google Drive")
+    render_page_header(
+        "Conexão com Google Drive",
+        "Conclua a autorização usando o mesmo endereço público configurado no Synapse AI.",
+        "Integração",
+    )
     st.warning(
         "O Google autorizou o retorno, mas a sessão do Synapse não está mais ativa "
         "nesta aba."

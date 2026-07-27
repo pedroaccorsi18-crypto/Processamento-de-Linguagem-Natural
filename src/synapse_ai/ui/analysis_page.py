@@ -84,11 +84,15 @@ from synapse_ai.ui.analysis_use_cases import (
     build_preventive_alerts_use_case,
     build_sentiment_analysis_use_case,
 )
+from synapse_ai.ui.theme import render_page_header
 
 
 def render_analysis_page(config: AppConfig) -> None:
-    st.title("Análises inteligentes")
-    st.write("Faça perguntas sobre os documentos enviados e receba respostas com fontes.")
+    render_page_header(
+        "Análises inteligentes",
+        "Escolha documentos, prepare embeddings quando necessário e gere respostas com fontes.",
+        "RAG e inteligência aplicada",
+    )
 
     user = get_current_session_user()
     if user is None:

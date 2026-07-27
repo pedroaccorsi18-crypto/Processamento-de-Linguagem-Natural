@@ -6,12 +6,16 @@ from synapse_ai.auth.auth import login_user
 from synapse_ai.auth.session import set_auth_session
 from synapse_ai.clients.supabase_client import create_supabase_client
 from synapse_ai.config import AppConfig
+from synapse_ai.ui.theme import render_page_header
 from synapse_ai.utils.validation import is_valid_email
 
 
 def render_login_page(config: AppConfig) -> None:
-    st.title("Entrar")
-    st.write("Acesse sua área privada do Synapse AI.")
+    render_page_header(
+        "Entrar no Synapse",
+        "Acesse sua área privada de inteligência organizacional.",
+        "Acesso seguro",
+    )
 
     with st.form("login_form"):
         email = st.text_input("E-mail")

@@ -33,6 +33,7 @@ from synapse_ai.services.report_service import (
     intelligent_report_to_pdf,
 )
 from synapse_ai.ui.dashboard_use_cases import build_intelligent_executive_report_use_case
+from synapse_ai.ui.theme import render_page_header
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,11 @@ class DashboardSummary:
 
 def render_dashboard_page(config: AppConfig) -> None:
     user = get_current_session_user()
-    st.title("Dashboard executivo")
+    render_page_header(
+        "Dashboard executivo",
+        "Visão consolidada da base documental, alertas preventivos e trilha de inteligência salva.",
+        "Área autenticada",
+    )
     if user is not None:
         st.caption(f"Usuário autenticado: {user.email}")
 

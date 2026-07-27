@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from synapse_ai.ui.dashboard_page import build_dashboard_summary
+from synapse_ai.ui.dashboard_page import (
+    DashboardSummary,
+    _build_next_best_steps,
+    build_dashboard_summary,
+)
 
 
 def test_build_dashboard_summary_counts_documents_and_action_items() -> None:
@@ -115,3 +119,60 @@ def test_build_dashboard_summary_handles_empty_state() -> None:
     assert summary.multi_agent_reports == 0
     assert summary.multi_agent_findings == 0
     assert summary.action_plans == 0
+    assert summary.action_items == 0
+    assert summary.high_priority_items == 0
+    assert summary.items_to_confirm == 0
+
+
+def test_build_next_best_steps_guides_empty_dashboard() -> None:
+    summary = DashboardSummary(
+        total_documents=0,
+        prepared_documents=0,
+        pending_documents=0,
+        saved_analyses=0,
+        intelligence_snapshots=0,
+        document_comparisons=0,
+        sentiment_reports=0,
+        preventive_alert_reports=0,
+        preventive_alerts=0,
+        critical_preventive_alerts=0,
+        historical_pattern_reports=0,
+        historical_patterns=0,
+        multi_agent_reports=0,
+        multi_agent_findings=0,
+        action_plans=0,
+        action_items=0,
+        high_priority_items=0,
+        items_to_confirm=0,
+    )
+
+    assert _build_next_best_steps(summary) == ["Envie o primeiro documento na aba Upload."]
+
+
+def test_build_next_best_steps_prioritizes_readiness_and_risk() -> None:
+    summary = DashboardSummary(
+        total_documents=3,
+        prepared_documents=1,
+        pending_documents=2,
+        saved_analyses=4,
+        intelligence_snapshots=1,
+        document_comparisons=1,
+        sentiment_reports=0,
+        preventive_alert_reports=1,
+        preventive_alerts=3,
+        critical_preventive_alerts=1,
+        historical_pattern_reports=0,
+        historical_patterns=0,
+        multi_agent_reports=0,
+        multi_agent_findings=0,
+        action_plans=0,
+        action_items=0,
+        high_priority_items=0,
+        items_to_confirm=0,
+    )
+
+    steps = _build_next_best_steps(summary)
+
+    assert steps[0].startswith("Atualize a base semântica")
+    assert steps[1].startswith("Revise 1 alerta")
+    assert steps[2].startswith("Gere um plano de ação")

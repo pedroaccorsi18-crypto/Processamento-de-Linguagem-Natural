@@ -33,7 +33,7 @@ from synapse_ai.services.report_service import (
     intelligent_report_to_pdf,
 )
 from synapse_ai.ui.dashboard_use_cases import build_intelligent_executive_report_use_case
-from synapse_ai.ui.theme import render_page_header
+from synapse_ai.ui.theme import render_callout, render_page_header
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,7 @@ def render_dashboard_page(config: AppConfig) -> None:
     user = get_current_session_user()
     render_page_header(
         "Dashboard executivo",
-        "Visão consolidada da base documental, alertas preventivos e trilha de inteligência salva.",
+        "Leitura consolidada da base documental, riscos, planos de ação e inteligência salva.",
         "Área autenticada",
     )
     if user is not None:
@@ -104,12 +104,14 @@ def render_dashboard_page(config: AppConfig) -> None:
     summary = build_dashboard_summary(documents, chunk_counts, analyses)
     openai_client = create_openai_client(config)
 
-    _render_summary_metrics(summary)
+    _render_dashboard_overview(summary)
+    _render_next_best_steps(summary)
     _render_document_health(documents, chunk_counts)
     _render_preventive_alerts(analyses)
+    _render_action_intelligence(analyses)
+    _render_intelligence_inventory(summary)
     _render_historical_patterns(analyses)
     _render_multi_agent_findings(analyses)
-    _render_action_intelligence(analyses)
     _render_executive_report_downloads(
         client,
         openai_client,
@@ -173,28 +175,84 @@ def build_dashboard_summary(
     )
 
 
-def _render_summary_metrics(summary: DashboardSummary) -> None:
-    st.subheader("Visão geral")
-    first_row = st.columns(5)
-    first_row[0].metric("Documentos", summary.total_documents)
-    first_row[1].metric("Preparados para IA", summary.prepared_documents)
-    first_row[2].metric("Análises salvas", summary.saved_analyses)
-    first_row[3].metric("Inteligências salvas", summary.intelligence_snapshots)
-    first_row[4].metric("Comparações", summary.document_comparisons)
+def _render_dashboard_overview(summary: DashboardSummary) -> None:
+    st.subheader("Leitura executiva")
+    render_callout(
+        "Como interpretar este painel",
+        "O Dashboard mostra se a base já está pronta para IA, quais riscos merecem atenção "
+        "e quais análises já viraram evidência reutilizável.",
+    )
 
-    second_row = st.columns(6)
-    second_row[0].metric("Pendentes de preparação", summary.pending_documents)
-    second_row[1].metric("Alertas preventivos", summary.preventive_alerts)
-    second_row[2].metric("Alertas críticos", summary.critical_preventive_alerts)
-    second_row[3].metric("Multiagente", summary.multi_agent_reports)
-    second_row[4].metric("Padrões históricos", summary.historical_patterns)
-    second_row[5].metric("A confirmar", summary.items_to_confirm)
+    metric_cols = st.columns(4)
+    metric_cols[0].metric(
+        "Base pronta",
+        f"{summary.prepared_documents} de {summary.total_documents}",
+        help="Documentos que já possuem trechos semânticos gerados para uso nas perguntas.",
+    )
+    metric_cols[1].metric(
+        "Análises",
+        summary.saved_analyses,
+        help="Perguntas, relatórios e artefatos de inteligência já salvos.",
+    )
+    metric_cols[2].metric(
+        "Riscos",
+        summary.preventive_alerts,
+        help="Alertas preventivos extraídos das análises salvas.",
+    )
+    metric_cols[3].metric(
+        "A confirmar",
+        summary.items_to_confirm,
+        help="Itens de planos de ação que ainda dependem de responsável, prazo ou risco.",
+    )
 
     if summary.total_documents:
         st.progress(
             summary.prepared_documents / summary.total_documents,
-            text="Cobertura semântica da base documental",
+            text=(
+                "Cobertura semântica: "
+                f"{summary.prepared_documents} de {summary.total_documents} documento(s) "
+                "preparado(s) para IA"
+            ),
         )
+    else:
+        st.info("Envie documentos na aba Upload para iniciar a base de conhecimento.")
+
+
+def _render_next_best_steps(summary: DashboardSummary) -> None:
+    st.subheader("Próximo melhor passo")
+    for index, step in enumerate(_build_next_best_steps(summary), start=1):
+        st.write(f"{index}. {step}")
+
+
+def _build_next_best_steps(summary: DashboardSummary) -> list[str]:
+    if summary.total_documents == 0:
+        return ["Envie o primeiro documento na aba Upload."]
+
+    steps: list[str] = []
+    if summary.pending_documents:
+        steps.append(
+            f"Atualize a base semântica para preparar {summary.pending_documents} "
+            "documento(s) ainda pendente(s)."
+        )
+    if summary.critical_preventive_alerts:
+        steps.append(
+            f"Revise {summary.critical_preventive_alerts} alerta(s) crítico(s) antes de "
+            "tomar decisões executivas."
+        )
+    if summary.high_priority_items:
+        steps.append(
+            f"Acompanhe {summary.high_priority_items} item(ns) de alta prioridade nos planos "
+            "de ação."
+        )
+    if summary.saved_analyses == 0:
+        steps.append("Faça uma pergunta na aba Análises para gerar as primeiras evidências.")
+    elif summary.action_plans == 0:
+        steps.append("Gere um plano de ação para transformar achados em tarefas acompanháveis.")
+    if not steps:
+        steps.append(
+            "A base está preparada. Continue fazendo perguntas ou gere um relatório executivo."
+        )
+    return steps[:4]
 
 
 def _render_document_health(
@@ -202,6 +260,10 @@ def _render_document_health(
     chunk_counts: dict[str, int],
 ) -> None:
     st.subheader("Saúde da base documental")
+    st.caption(
+        "Mostra quais arquivos já podem ser usados nas perguntas com IA e quais ainda "
+        "precisam de preparação semântica."
+    )
     if not documents:
         st.info("Nenhum documento enviado ainda.")
         return
@@ -224,6 +286,9 @@ def _render_document_health(
 
 def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
     st.subheader("Prioridades dos planos de ação")
+    st.caption(
+        "Consolida tarefas, responsáveis, prazos e riscos extraídos dos planos de ação salvos."
+    )
     action_plans = [analysis for analysis in analyses if _is_action_plan(analysis)]
     action_items = _extract_action_items(action_plans)
     if not action_items:
@@ -265,8 +330,25 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
         )
 
 
+def _render_intelligence_inventory(summary: DashboardSummary) -> None:
+    st.subheader("Inventário de inteligência")
+    st.caption(
+        "Resumo dos tipos de análise já acumulados. Esses números ajudam a entender a trilha "
+        "de evidências existente, mas não indicam erro quando estão zerados."
+    )
+    inventory_cols = st.columns(4)
+    inventory_cols[0].metric("Comparações", summary.document_comparisons)
+    inventory_cols[1].metric("Relatórios", summary.intelligence_snapshots)
+    inventory_cols[2].metric("Padrões", summary.historical_patterns)
+    inventory_cols[3].metric("Multiagente", summary.multi_agent_reports)
+
+
 def _render_preventive_alerts(analyses: list[dict[str, object]]) -> None:
     st.subheader("Alertas preventivos")
+    st.caption(
+        "Sinais de atenção identificados em análises salvas. Eles apontam riscos de negócio, "
+        "não falhas técnicas da plataforma."
+    )
     alert_reports = [analysis for analysis in analyses if _is_preventive_alert_report(analysis)]
     alerts = _extract_preventive_alerts(alert_reports)
     if not alerts:
@@ -321,6 +403,9 @@ def _render_preventive_alerts(analyses: list[dict[str, object]]) -> None:
 
 def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
     st.subheader("Padrões históricos")
+    st.caption(
+        "Recorrências detectadas quando você salva análises voltadas a padrões históricos."
+    )
     pattern_reports = [
         analysis for analysis in analyses if _is_historical_pattern_report(analysis)
     ]
@@ -361,6 +446,9 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
 
 def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
     st.subheader("Orquestração multiagente")
+    st.caption(
+        "Achados gerados por perspectivas especializadas, como riscos, processos e decisões."
+    )
     reports = [analysis for analysis in analyses if _is_multi_agent_report(analysis)]
     findings = _extract_multi_agent_findings(reports)
     if not findings:

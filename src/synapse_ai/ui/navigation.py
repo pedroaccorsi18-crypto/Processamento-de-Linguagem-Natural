@@ -9,15 +9,20 @@ def public_navigation() -> str:
         "Navegação",
         options=("home", "login", "register"),
         format_func=_public_label,
+        key="public_page",
     )
 
 
 def private_navigation() -> str:
     st.sidebar.title("Synapse AI")
+    pending_page = st.session_state.pop("pending_private_page", None)
+    if pending_page in {"dashboard", "upload", "analysis", "audit"}:
+        st.session_state["private_page"] = pending_page
     return st.sidebar.radio(
         "Área autenticada",
         options=("dashboard", "upload", "analysis", "audit"),
         format_func=_private_label,
+        key="private_page",
     )
 
 

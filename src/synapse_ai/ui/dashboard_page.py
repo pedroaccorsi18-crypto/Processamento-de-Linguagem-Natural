@@ -296,6 +296,11 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
             "Nenhum plano de ação salvo ainda. Gere um plano de ação na aba Análises "
             "para acompanhar tarefas, prazos, responsáveis e riscos."
         )
+        _render_analysis_cta(
+            "Ir para plano de ação",
+            "action_plan",
+            "cta-dashboard-action-plan",
+        )
         return
 
     rows = [
@@ -415,6 +420,11 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
             "Nenhum padrão histórico salvo ainda. Gere uma análise de padrões históricos "
             "na aba Análises para identificar recorrências entre documentos."
         )
+        _render_analysis_cta(
+            "Ir para padrões históricos",
+            "historical_patterns",
+            "cta-dashboard-historical-patterns",
+        )
         return
 
     severity_order = {"Alta": 0, "Média": 1, "Baixa": 2}
@@ -455,6 +465,11 @@ def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
         st.info(
             "Nenhuma orquestração multiagente salva ainda. Gere uma análise multiagente "
             "na aba Análises para comparar achados, riscos e recomendações por perspectiva."
+        )
+        _render_analysis_cta(
+            "Ir para orquestração multiagente",
+            "multi_agent",
+            "cta-dashboard-multi-agent",
         )
         return
 
@@ -600,6 +615,13 @@ def _render_available_capabilities() -> None:
     for index, capability in enumerate(capabilities):
         with cols[index % 2]:
             st.info(capability)
+
+
+def _render_analysis_cta(label: str, focus: str, key: str) -> None:
+    if st.button(label, key=key):
+        st.session_state["analysis_focus"] = focus
+        st.session_state["pending_private_page"] = "analysis"
+        st.rerun()
 
 
 def _format_count_message(count: int, singular: str, plural: str) -> str:

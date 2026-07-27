@@ -93,6 +93,7 @@ def render_analysis_page(config: AppConfig) -> None:
         "Escolha documentos, prepare embeddings quando necessário e gere respostas com fontes.",
         "RAG e inteligência aplicada",
     )
+    _render_analysis_focus_hint()
 
     user = get_current_session_user()
     if user is None:
@@ -375,6 +376,35 @@ def render_analysis_page(config: AppConfig) -> None:
 
     st.divider()
     _render_analysis_history(supabase_client, user.id)
+
+
+def _render_analysis_focus_hint() -> None:
+    focus = st.session_state.get("analysis_focus")
+    hints = {
+        "action_plan": (
+            "Plano de ação",
+            "Selecione os documentos, confira se a base semântica está pronta e desça até "
+            "Plano de ação. Marque Salvar plano no histórico para aparecer no Dashboard.",
+        ),
+        "historical_patterns": (
+            "Padrões históricos",
+            "Selecione os documentos, confira se há análises anteriores salvas e desça até "
+            "Padrões históricos. Marque Salvar padrões no histórico para aparecer no Dashboard.",
+        ),
+        "multi_agent": (
+            "Orquestração multiagente",
+            "Selecione os documentos e desça até Orquestração multiagente. Marque Salvar "
+            "orquestração no histórico para aparecer no Dashboard.",
+        ),
+    }
+    if focus not in hints:
+        return
+
+    title, body = hints[focus]
+    st.info(f"Você veio do Dashboard para gerar: {title}. {body}")
+    if st.button("Limpar orientação", key="clear-analysis-focus"):
+        st.session_state.pop("analysis_focus", None)
+        st.rerun()
 
 
 def _index_documents(

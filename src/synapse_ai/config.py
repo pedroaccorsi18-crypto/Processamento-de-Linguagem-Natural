@@ -36,14 +36,31 @@ class GoogleDriveSettings:
 
 
 @dataclass(frozen=True)
+class AppSettings:
+    public_url: str = "http://localhost:8501"
+
+
+@dataclass(frozen=True)
 class AppConfig:
     supabase: SupabaseSettings
     openai: OpenAISettings
     google_drive: GoogleDriveSettings
+    app: AppSettings
 
 
 def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
     source = secrets if secrets is not None else _streamlit_secrets()
+    google_drive = GoogleDriveSettings(
+        api_key=_optional(source, "google_drive", "api_key", ""),
+        client_id=_optional(source, "google_drive", "client_id", ""),
+        client_secret=_optional(source, "google_drive", "client_secret", ""),
+        redirect_uri=_optional(
+            source,
+            "google_drive",
+            "redirect_uri",
+            "http://localhost:8501",
+        ),
+    )
     return AppConfig(
         supabase=SupabaseSettings(
             url=_required(source, "supabase", "url"),
@@ -65,16 +82,9 @@ def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
                 "gpt-4o-mini-transcribe",
             ),
         ),
-        google_drive=GoogleDriveSettings(
-            api_key=_optional(source, "google_drive", "api_key", ""),
-            client_id=_optional(source, "google_drive", "client_id", ""),
-            client_secret=_optional(source, "google_drive", "client_secret", ""),
-            redirect_uri=_optional(
-                source,
-                "google_drive",
-                "redirect_uri",
-                "http://localhost:8501",
-            ),
+        google_drive=google_drive,
+        app=AppSettings(
+            public_url=_optional(source, "app", "public_url", google_drive.redirect_uri),
         ),
     )
 

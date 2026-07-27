@@ -46,6 +46,9 @@ embedding_model = "text-embedding-3-small"
 generation_model = "gpt-5-mini"
 transcription_model = "gpt-4o-mini-transcribe"
 
+[app]
+public_url = "https://SUA-URL-PUBLICA"
+
 [google_drive]
 api_key = ""
 client_id = "SEU_GOOGLE_OAUTH_CLIENT_ID"
@@ -73,10 +76,12 @@ Se o redirect URI do Google Cloud e o valor em `secrets` forem diferentes, o Goo
 Antes do deploy:
 
 1. Confirme que `supabase/schema.sql` foi executado no projeto correto.
-2. Confirme que o bucket privado `documents` existe.
-3. Confirme que Row Level Security está ativa.
-4. Confirme que e-mail/senha está habilitado em Supabase Auth.
-5. Teste login, cadastro, upload e download com um usuário de demonstração.
+2. Em Authentication > URL Configuration, configure Site URL com a URL pública do app.
+3. Em Redirect URLs, adicione a URL pública do app.
+4. Confirme que o bucket privado `documents` existe.
+5. Confirme que Row Level Security está ativa.
+6. Confirme que e-mail/senha está habilitado em Supabase Auth.
+7. Teste login, cadastro, upload e download com um usuário de demonstração.
 
 ## Checklist de validação pós-deploy
 

@@ -25,6 +25,16 @@ def test_load_config_from_injected_mapping() -> None:
     assert config.openai.generation_model == "gpt-5-mini"
     assert config.openai.transcription_model == "gpt-4o-mini-transcribe"
     assert config.google_drive.api_key == ""
+    assert config.app.public_url == "http://localhost:8501"
+
+
+def test_load_config_reads_public_app_url() -> None:
+    secrets = fake_secrets()
+    secrets["app"] = {"public_url": "https://synapse-ai-pnl.streamlit.app"}
+
+    config = load_config(secrets)
+
+    assert config.app.public_url == "https://synapse-ai-pnl.streamlit.app"
 
 
 def test_load_config_reports_missing_setting_name_only() -> None:

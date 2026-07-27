@@ -18,9 +18,18 @@ class AuthResult:
     refresh_token: str | None = None
 
 
-def register_user(client: Any, email: str, password: str) -> AuthResult:
+def register_user(
+    client: Any,
+    email: str,
+    password: str,
+    email_redirect_to: str | None = None,
+) -> AuthResult:
+    payload: dict[str, object] = {"email": email, "password": password}
+    if email_redirect_to:
+        payload["options"] = {"email_redirect_to": email_redirect_to}
+
     try:
-        response = client.auth.sign_up({"email": email, "password": password})
+        response = client.auth.sign_up(payload)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Supabase sign-up failed: %s", exc.__class__.__name__)
         return AuthResult(

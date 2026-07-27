@@ -134,6 +134,9 @@ embedding_model = "text-embedding-3-small"
 generation_model = "gpt-5-mini"
 transcription_model = "gpt-4o-mini-transcribe"
 
+[app]
+public_url = "http://localhost:8501"
+
 [google_drive]
 api_key = ""
 client_id = "GOOGLE_OAUTH_CLIENT_ID_EXEMPLO"
@@ -153,9 +156,11 @@ pastas compartilhadas.
 1. Crie um projeto no Supabase.
 2. Ative autenticação por e-mail e senha.
 3. Copie a URL do projeto e a publishable key para `.streamlit/secrets.toml`.
-4. Abra `supabase/schema.sql`.
-5. Revise o SQL.
-6. Execute manualmente no Supabase SQL Editor.
+4. Em produção, configure `app.public_url` com a URL pública do Synapse AI e cadastre a
+   mesma URL em Authentication > URL Configuration no Supabase.
+5. Abra `supabase/schema.sql`.
+6. Revise o SQL.
+7. Execute manualmente no Supabase SQL Editor.
 
 O script cria tabelas para `profiles`, `documents`, `document_chunks` e `analyses`, configura o bucket privado `documents`, habilita Row Level Security e define políticas por usuário. Na Fase 3, `document_chunks` armazena os trechos, embeddings e metadados usados pela busca semântica.
 

@@ -9,10 +9,12 @@ class FakeAuth:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
         self.signed_out = False
+        self.sign_up_payload: dict[str, object] | None = None
 
-    def sign_up(self, _payload: dict[str, str]) -> SimpleNamespace:
+    def sign_up(self, payload: dict[str, object]) -> SimpleNamespace:
         if self.fail:
             raise RuntimeError("failed")
+        self.sign_up_payload = payload
         return SimpleNamespace(user=SimpleNamespace(id="user-1", email="user@example.com"))
 
     def sign_in_with_password(self, _payload: dict[str, str]) -> SimpleNamespace:
@@ -45,6 +47,24 @@ def test_register_user_success() -> None:
     assert result.success is True
     assert result.user is not None
     assert result.user.email == "user@example.com"
+
+
+def test_register_user_sends_email_redirect_when_available() -> None:
+    client = FakeClient()
+
+    result = register_user(
+        client,
+        "user@example.com",
+        "password123",
+        "https://synapse-ai-pnl.streamlit.app",
+    )
+
+    assert result.success is True
+    assert client.auth.sign_up_payload == {
+        "email": "user@example.com",
+        "password": "password123",
+        "options": {"email_redirect_to": "https://synapse-ai-pnl.streamlit.app"},
+    }
 
 
 def test_register_user_failure() -> None:

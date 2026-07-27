@@ -32,7 +32,7 @@ def render_register_page(config: AppConfig) -> None:
         return
 
     client = create_supabase_client(config)
-    result = register_user(client, email, password)
+    result = register_user(client, email, password, config.app.public_url)
     if result.success:
         st.success(result.message)
     else:

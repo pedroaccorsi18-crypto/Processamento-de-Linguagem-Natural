@@ -21,7 +21,11 @@ def initialize_session(state: MutableMapping[str, Any] | None = None) -> None:
 
 def is_authenticated(state: MutableMapping[str, Any] | None = None) -> bool:
     session = _state(state)
-    return bool(session.get(AUTHENTICATED_KEY))
+    return (
+        bool(session.get(AUTHENTICATED_KEY))
+        and get_current_session_user(session) is not None
+        and get_access_token(session) is not None
+    )
 
 
 def get_current_session_user(
@@ -29,7 +33,10 @@ def get_current_session_user(
 ) -> AuthenticatedUser | None:
     session = _state(state)
     user = session.get(USER_KEY)
-    return user if isinstance(user, AuthenticatedUser) else None
+    normalized_user = _normalize_user(user)
+    if normalized_user is not None and user != _serialize_user(normalized_user):
+        session[USER_KEY] = _serialize_user(normalized_user)
+    return normalized_user
 
 
 def get_access_token(state: MutableMapping[str, Any] | None = None) -> str | None:
@@ -50,7 +57,17 @@ def set_auth_session(
 ) -> None:
     session = _state(state)
     session[AUTHENTICATED_KEY] = True
-    session[USER_KEY] = user
+    session[USER_KEY] = _serialize_user(user)
+    session[ACCESS_TOKEN_KEY] = access_token
+    session[REFRESH_TOKEN_KEY] = refresh_token
+
+
+def update_auth_tokens(
+    access_token: str,
+    refresh_token: str | None,
+    state: MutableMapping[str, Any] | None = None,
+) -> None:
+    session = _state(state)
     session[ACCESS_TOKEN_KEY] = access_token
     session[REFRESH_TOKEN_KEY] = refresh_token
 
@@ -79,3 +96,23 @@ def _state(state: MutableMapping[str, Any] | None) -> MutableMapping[str, Any]:
     import streamlit as st
 
     return st.session_state
+
+
+def _serialize_user(user: AuthenticatedUser) -> dict[str, str]:
+    return {"id": user.id, "email": user.email}
+
+
+def _normalize_user(user: Any) -> AuthenticatedUser | None:
+    if isinstance(user, AuthenticatedUser):
+        return user
+
+    if isinstance(user, dict):
+        user_id = user.get("id")
+        email = user.get("email")
+    else:
+        user_id = getattr(user, "id", None)
+        email = getattr(user, "email", None)
+
+    if isinstance(user_id, str) and user_id and isinstance(email, str) and email:
+        return AuthenticatedUser(id=user_id, email=email)
+    return None

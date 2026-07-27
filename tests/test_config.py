@@ -21,6 +21,8 @@ def test_load_config_from_injected_mapping() -> None:
     assert config.supabase.url == "https://example.supabase.co"
     assert config.supabase.publishable_key == "public-key"
     assert config.openai.api_key == "openai-key"
+    assert config.openai.embedding_model == "text-embedding-3-small"
+    assert config.openai.generation_model == "gpt-5-mini"
 
 
 def test_load_config_reports_missing_setting_name_only() -> None:

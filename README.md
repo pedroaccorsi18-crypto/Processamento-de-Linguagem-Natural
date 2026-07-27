@@ -1,6 +1,6 @@
 # Synapse AI
 
-Synapse AI é um MVP acadêmico de Processamento de Linguagem Natural e Inteligência Organizacional. O projeto prepara uma plataforma para centralizar documentos organizacionais, estruturar conteúdo textual e, nas próximas fases, permitir consultas em linguagem natural com rastreabilidade das fontes.
+Synapse AI é um MVP acadêmico de Processamento de Linguagem Natural e Inteligência Organizacional. O projeto prepara uma plataforma para centralizar documentos organizacionais, estruturar conteúdo textual e permitir consultas em linguagem natural com rastreabilidade das fontes.
 
 ## Problema de negócio
 
@@ -8,11 +8,11 @@ Organizações acumulam decisões, riscos, responsáveis e contexto em documento
 
 ## Objetivo acadêmico
 
-Construir, de forma incremental, uma arquitetura de PLN capaz de receber documentos, organizar conhecimento e apoiar análises futuras com busca semântica, RAG e sínteses executivas.
+Construir, de forma incremental, uma arquitetura de PLN capaz de receber documentos, organizar conhecimento e apoiar análises com busca semântica, RAG e sínteses executivas.
 
 ## Estágio atual
 
-Fase 2 — Data Layer.
+Fase 4 inicial — Intelligence.
 
 Implementado até agora:
 
@@ -24,18 +24,35 @@ Implementado até agora:
 - arquitetura modular em `src/synapse_ai`;
 - schema SQL planejado para Supabase;
 - testes automatizados;
-- configuração de lint com Ruff.
+- configuração de lint com Ruff;
 - upload de PDF, DOCX, TXT e MD;
 - extração textual local;
+- armazenamento privado do arquivo original para download futuro;
 - metadados básicos;
-- persistência inicial na tabela `documents`.
+- persistência inicial na tabela `documents`;
+- chunking textual;
+- geração de embeddings com OpenAI;
+- tabela vetorial `document_chunks` com `pgvector`;
+- busca semântica via função SQL `match_document_chunks`;
+- seleção explícita de documentos para definir o escopo da análise;
+- respostas em linguagem natural com fontes recuperadas;
+- geração de planos de ação com fontes;
+- extração estruturada de inteligência organizacional;
+- identificação de decisões, riscos, inconsistências, pendências, prazos e responsáveis;
+- comparação documental para detectar divergências entre arquivos;
+- análise de sentimentos organizacionais, incluindo urgência, tensão, confiança, conflito e risco percebido;
+- geração de alertas preventivos para prazos críticos, responsáveis ausentes, riscos e lacunas de evidência;
+- reconhecimento de padrões históricos a partir de análises salvas;
+- dashboard executivo;
+- relatórios executivos com IA;
+- auditoria de fontes com exportação em PDF e Markdown.
 
 Ainda não implementado:
 
-- embeddings;
-- banco vetorial;
-- RAG;
-- chamadas automáticas à OpenAI.
+- conectores reais para Teams, Slack, Jira, e-mail e SharePoint;
+- agentes especializados;
+- alertas preventivos;
+- versionamento avançado de documentos.
 
 ## Stack
 
@@ -106,6 +123,8 @@ publishable_key = "sb_publishable_EXEMPLO"
 
 [openai]
 api_key = "sk-proj-EXEMPLO"
+embedding_model = "text-embedding-3-small"
+generation_model = "gpt-5-mini"
 ```
 
 O repositório inclui `.streamlit/secrets.example.toml` apenas como exemplo sem credenciais reais.
@@ -119,7 +138,7 @@ O repositório inclui `.streamlit/secrets.example.toml` apenas como exemplo sem 
 5. Revise o SQL.
 6. Execute manualmente no Supabase SQL Editor.
 
-O script cria tabelas para `profiles`, `documents` e `analyses`, habilita Row Level Security e define políticas por usuário. Na Fase 2, `documents` também armazena o texto extraído, contagem de caracteres, metadados e data de processamento.
+O script cria tabelas para `profiles`, `documents`, `document_chunks` e `analyses`, configura o bucket privado `documents`, habilita Row Level Security e define políticas por usuário. Na Fase 3, `document_chunks` armazena os trechos, embeddings e metadados usados pela busca semântica.
 
 ## Executar o app
 
@@ -172,9 +191,12 @@ Fase 4 — Intelligence
 - sínteses;
 - riscos;
 - inconsistências;
+- sentimentos organizacionais;
+- alertas preventivos;
+- padrões históricos;
 - insights;
 - agentes especializados.
 
 ## Limitações
 
-Esta versão entrega a fundação técnica e a camada inicial de dados. A página de upload processa documentos localmente e persiste texto/metadados no Supabase. A página de análises ainda não executa IA, embeddings ou RAG.
+Esta versão entrega a fundação técnica, a camada inicial de dados e uma primeira camada RAG. A página de upload processa documentos localmente e persiste texto/metadados no Supabase. A página de análises depende do `schema.sql` atualizado, de documentos salvos e da preparação semântica dos documentos antes das perguntas.

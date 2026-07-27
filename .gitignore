@@ -14,6 +14,7 @@ venv/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .python-version
 .pytest_cache/
 .mypy_cache/
@@ -44,3 +45,4 @@ data/
 uploads/
 local_data/
 work/
+output/

@@ -16,7 +16,7 @@ def private_navigation() -> str:
     st.sidebar.title("Synapse AI")
     return st.sidebar.radio(
         "Área autenticada",
-        options=("dashboard", "upload", "analysis"),
+        options=("dashboard", "upload", "analysis", "audit"),
         format_func=_private_label,
     )
 
@@ -35,5 +35,6 @@ def _private_label(page: str) -> str:
         "dashboard": "Dashboard",
         "upload": "Upload",
         "analysis": "Análises",
+        "audit": "Auditoria",
     }
     return labels[page]

@@ -9,6 +9,7 @@ from synapse_ai.services.document_repository import (
     DocumentPersistenceError,
     list_user_documents,
     save_parsed_document,
+    update_document_storage_location,
 )
 from synapse_ai.services.document_service import UploadedDocument, parse_uploaded_document
 
@@ -20,6 +21,10 @@ class FakeQuery:
         self.inserted_payload: dict[str, Any] | None = None
 
     def insert(self, payload: dict[str, Any]) -> FakeQuery:
+        self.inserted_payload = payload
+        return self
+
+    def update(self, payload: dict[str, Any]) -> FakeQuery:
         self.inserted_payload = payload
         return self
 
@@ -81,3 +86,21 @@ def test_list_user_documents_returns_response_data() -> None:
     client = FakeClient(FakeQuery(response_data=documents))
 
     assert list_user_documents(client, "user-1") == documents
+
+
+def test_update_document_storage_location_updates_documents_table() -> None:
+    query = FakeQuery()
+    client = FakeClient(query)
+
+    update_document_storage_location(
+        client,
+        "user-1",
+        "doc-1",
+        "documents",
+        "user-1/doc-1/ata.txt",
+    )
+
+    assert query.inserted_payload == {
+        "storage_bucket": "documents",
+        "storage_path": "user-1/doc-1/ata.txt",
+    }

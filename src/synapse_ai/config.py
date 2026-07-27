@@ -22,6 +22,8 @@ class SupabaseSettings:
 @dataclass(frozen=True)
 class OpenAISettings:
     api_key: str = field(repr=False)
+    embedding_model: str = "text-embedding-3-small"
+    generation_model: str = "gpt-5-mini"
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,16 @@ def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
             url=_required(source, "supabase", "url"),
             publishable_key=_required(source, "supabase", "publishable_key"),
         ),
-        openai=OpenAISettings(api_key=_required(source, "openai", "api_key")),
+        openai=OpenAISettings(
+            api_key=_required(source, "openai", "api_key"),
+            embedding_model=_optional(
+                source,
+                "openai",
+                "embedding_model",
+                "text-embedding-3-small",
+            ),
+            generation_model=_optional(source, "openai", "generation_model", "gpt-5-mini"),
+        ),
     )
 
 
@@ -60,3 +71,18 @@ def _required(source: Mapping[str, Any], section: str, key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise MissingConfigError(setting_name)
     return value.strip()
+
+
+def _optional(
+    source: Mapping[str, Any],
+    section: str,
+    key: str,
+    default: str,
+) -> str:
+    try:
+        section_value = source[section]
+        value = section_value[key]
+    except (KeyError, TypeError):
+        return default
+
+    return value.strip() if isinstance(value, str) and value.strip() else default

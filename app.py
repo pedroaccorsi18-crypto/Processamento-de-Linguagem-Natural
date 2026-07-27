@@ -5,6 +5,7 @@ import streamlit as st
 from synapse_ai.auth.session import initialize_session, is_authenticated
 from synapse_ai.config import MissingConfigError, load_config
 from synapse_ai.ui.analysis_page import render_analysis_page
+from synapse_ai.ui.audit_page import render_audit_page
 from synapse_ai.ui.dashboard_page import render_dashboard_page
 from synapse_ai.ui.home_page import render_home_page
 from synapse_ai.ui.login_page import render_login_page
@@ -34,11 +35,13 @@ def main() -> None:
     if is_authenticated():
         selected_page = private_navigation()
         if selected_page == "dashboard":
-            render_dashboard_page()
+            render_dashboard_page(config)
         elif selected_page == "upload":
             render_upload_page(config)
         elif selected_page == "analysis":
-            render_analysis_page()
+            render_analysis_page(config)
+        elif selected_page == "audit":
+            render_audit_page(config)
         return
 
     selected_page = public_navigation()

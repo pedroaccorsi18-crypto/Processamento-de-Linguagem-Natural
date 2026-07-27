@@ -8,11 +8,11 @@ def render_home_page() -> None:
     st.subheader("Organizational Cognitive Intelligence Platform")
     st.write(
         "MVP acadêmico para organizar conhecimento institucional, preparar busca semântica "
-        "e apoiar consultas futuras sobre documentos organizacionais."
+        "e apoiar consultas sobre documentos organizacionais."
     )
     st.info(
-        "Esta fase entrega a fundação técnica. O pipeline completo de PLN virá "
-        "nas próximas fases."
+        "A plataforma já processa arquivos, cria uma base semântica e responde perguntas "
+        "com fontes recuperadas dos documentos enviados."
     )
     col_login, col_register = st.columns(2)
     with col_login:

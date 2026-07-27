@@ -186,7 +186,10 @@ def render_upload_page(config: AppConfig) -> None:
                     st.success("Documento processado, salvo e disponível para download.")
                     st.rerun()
                 else:
-                    st.success("Documento processado e salvo com sucesso.")
+                    st.warning(
+                        "Documento processado e salvo para análise, mas o arquivo original "
+                        "não ficou disponível para download."
+                    )
 
     _render_google_drive_import(config, client, user.id, documents)
 
@@ -555,7 +558,10 @@ def _render_download_button(client: object, document: dict[str, object]) -> None
     filename = str(document.get("filename") or "documento")
     content_type = str(document.get("content_type") or "application/octet-stream")
     if not isinstance(storage_bucket, str) or not isinstance(storage_path, str):
-        st.caption("Arquivo original ainda não está disponível para download.")
+        st.caption(
+            "Arquivo original não está disponível para download. O texto extraído continua "
+            "disponível para análises."
+        )
         return
 
     try:

@@ -81,8 +81,28 @@ values (
   array[
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/json',
+    'application/mbox',
     'text/plain',
     'text/markdown',
+    'text/csv',
+    'text/vtt',
+    'text/calendar',
+    'message/rfc822',
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/mp4',
+    'audio/m4a',
+    'audio/x-m4a',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/webm',
+    'audio/ogg',
+    'video/mp4',
+    'video/mpeg',
+    'video/webm',
     'application/octet-stream'
   ]
 )

@@ -14,7 +14,9 @@ from synapse_ai.services.document_storage import (
 class FakeBucket:
     def __init__(self, fail: bool = False) -> None:
         self.fail = fail
+        self.fail_once = False
         self.upload_call: dict[str, object] = {}
+        self.upload_calls: list[dict[str, object]] = []
 
     def upload(
         self,
@@ -22,9 +24,13 @@ class FakeBucket:
         content: bytes,
         options: dict[str, str],
     ) -> None:
+        if self.fail_once:
+            self.fail_once = False
+            raise RuntimeError("failed once")
         if self.fail:
             raise RuntimeError("failed")
         self.upload_call = {"path": path, "content": content, "options": options}
+        self.upload_calls.append(self.upload_call)
 
     def download(self, path: str) -> bytes:
         if self.fail:
@@ -69,6 +75,22 @@ def test_upload_original_document_uses_private_user_path() -> None:
     assert stored_file.path == "user-1/doc-1/ata.pdf"
     assert bucket.upload_call["content"] == b"pdf"
     assert bucket.upload_call["options"]["content-type"] == "application/pdf"
+
+
+def test_upload_original_document_falls_back_to_binary_content_type() -> None:
+    bucket = FakeBucket()
+    bucket.fail_once = True
+    client = FakeClient(bucket)
+    upload = UploadedDocument(
+        filename="entrevista.m4a",
+        content_type="audio/x-m4a",
+        content=b"audio",
+    )
+
+    stored_file = upload_original_document(client, "user-1", "doc-1", upload)
+
+    assert stored_file.path == "user-1/doc-1/entrevista.m4a"
+    assert bucket.upload_call["options"]["content-type"] == "application/octet-stream"
 
 
 def test_download_original_document_returns_bytes() -> None:

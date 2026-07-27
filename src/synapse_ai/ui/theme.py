@@ -11,18 +11,20 @@ def apply_synapse_theme() -> None:
         """
         <style>
         :root {
-            --synapse-bg: #f5f7fb;
+            --synapse-bg: #f6f8fb;
             --synapse-surface: #ffffff;
-            --synapse-ink: #111827;
+            --synapse-ink: #0f172a;
             --synapse-muted: #667085;
             --synapse-faint: #98a2b3;
-            --synapse-border: #dbe2ea;
-            --synapse-nav: #0f141f;
-            --synapse-nav-active: #192131;
-            --synapse-brand: #f32945;
-            --synapse-brand-dark: #d81e38;
-            --synapse-blue: #1457c8;
-            --synapse-blue-soft: #eaf3ff;
+            --synapse-border: #d9e2ee;
+            --synapse-nav: #0b1220;
+            --synapse-nav-active: #172338;
+            --synapse-brand: #2563eb;
+            --synapse-brand-dark: #1d4ed8;
+            --synapse-danger: #e11d48;
+            --synapse-danger-soft: #fff1f2;
+            --synapse-blue: #1d4ed8;
+            --synapse-blue-soft: #eff6ff;
             --synapse-green: #07864f;
             --synapse-green-soft: #e8f8ee;
             --synapse-amber: #b56a08;
@@ -52,13 +54,40 @@ def apply_synapse_theme() -> None:
             border-right: 1px solid rgba(255, 255, 255, 0.06);
         }
 
+        [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+        [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"],
+        [data-testid="stSidebar"] [data-testid="stRadio"],
+        [data-testid="stSidebar"] div[data-testid="stForm"] {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
+        [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
         [data-testid="stSidebar"] h1,
         [data-testid="stSidebar"] h2,
         [data-testid="stSidebar"] h3,
         [data-testid="stSidebar"] p,
         [data-testid="stSidebar"] span,
         [data-testid="stSidebar"] label {
-            color: #edf2f7 !important;
+            color: #dbe7f5 !important;
+        }
+
+        [data-testid="stSidebar"] h1 {
+            color: #f8fafc !important;
+            font-size: 1.55rem !important;
+            font-weight: 850 !important;
+            margin-bottom: 1.25rem !important;
+        }
+
+        [data-testid="stSidebar"] label > div:last-child {
+            color: #c7d2e1 !important;
+            font-weight: 650;
         }
 
         [data-testid="stSidebar"] [role="radiogroup"] label {
@@ -78,6 +107,10 @@ def apply_synapse_theme() -> None:
             box-shadow: inset 4px 0 0 var(--synapse-brand);
         }
 
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) * {
+            color: #ffffff !important;
+        }
+
         [data-testid="stSidebar"] [role="radio"] {
             border-color: rgba(255, 255, 255, 0.42) !important;
         }
@@ -87,7 +120,7 @@ def apply_synapse_theme() -> None:
             border-color: var(--synapse-brand) !important;
         }
 
-        [data-testid="block-container"] {
+        [data-testid="stMain"] [data-testid="block-container"] {
             max-width: 1180px;
             padding-top: 3.25rem;
             padding-bottom: 4rem;
@@ -173,12 +206,12 @@ def apply_synapse_theme() -> None:
             font-weight: 800;
         }
 
-        [data-testid="stVerticalBlockBorderWrapper"],
-        [data-testid="stExpander"],
-        div[data-testid="stForm"] {
+        [data-testid="stMain"] [data-testid="stVerticalBlockBorderWrapper"],
+        [data-testid="stMain"] [data-testid="stExpander"],
+        [data-testid="stMain"] div[data-testid="stForm"] {
             background: var(--synapse-surface);
             border-color: var(--synapse-border) !important;
-            border-radius: var(--synapse-radius-lg) !important;
+            border-radius: var(--synapse-radius) !important;
             box-shadow: none !important;
         }
 

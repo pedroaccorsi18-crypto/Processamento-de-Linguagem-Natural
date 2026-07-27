@@ -222,7 +222,10 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
     action_plans = [analysis for analysis in analyses if _is_action_plan(analysis)]
     action_items = _extract_action_items(action_plans)
     if not action_items:
-        st.info("Nenhum plano de ação salvo ainda.")
+        st.info(
+            "Nenhum plano de ação salvo ainda. Gere um plano de ação na aba Análises "
+            "para acompanhar tarefas, prazos, responsáveis e riscos."
+        )
         return
 
     rows = [
@@ -240,10 +243,20 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
     high_priority = [item for item in action_items if item.get("priority") == "Alta"]
     to_confirm = [item for item in action_items if _requires_confirmation(item)]
     if high_priority:
-        st.warning(f"{len(high_priority)} item(ns) de alta prioridade exigem atenção.")
+        st.warning(
+            _format_count_message(
+                len(high_priority),
+                "item de alta prioridade merece acompanhamento no plano de ação.",
+                "itens de alta prioridade merecem acompanhamento no plano de ação.",
+            )
+        )
     if to_confirm:
         st.info(
-            f"{len(to_confirm)} item(ns) ainda têm responsável, prazo ou risco a confirmar."
+            _format_count_message(
+                len(to_confirm),
+                "item ainda tem responsável, prazo ou risco a confirmar.",
+                "itens ainda têm responsável, prazo ou risco a confirmar.",
+            )
         )
 
 
@@ -274,10 +287,31 @@ def _render_preventive_alerts(analyses: list[dict[str, object]]) -> None:
 
     critical_alerts = [alert for alert in alerts if alert.get("severity") == "Crítica"]
     high_alerts = [alert for alert in alerts if alert.get("severity") == "Alta"]
+    if critical_alerts or high_alerts:
+        st.caption(
+            "Radar executivo gerado a partir dos alertas preventivos salvos. Esses avisos "
+            "indicam pontos de atenção nos documentos analisados, não falhas da plataforma."
+        )
     if critical_alerts:
-        st.error(f"{len(critical_alerts)} alerta(s) crítico(s) exigem validação imediata.")
+        st.warning(
+            _format_count_message(
+                len(critical_alerts),
+                "alerta crítico encontrado. Valide evidências, responsável e prazo antes "
+                "de tomar uma decisão.",
+                "alertas críticos encontrados. Valide evidências, responsáveis e prazos "
+                "antes de tomar uma decisão.",
+            )
+        )
     if high_alerts:
-        st.warning(f"{len(high_alerts)} alerta(s) de alta severidade exigem acompanhamento.")
+        st.info(
+            _format_count_message(
+                len(high_alerts),
+                "alerta de alta severidade encontrado. Acompanhe o desdobramento nas "
+                "próximas análises.",
+                "alertas de alta severidade encontrados. Acompanhe os desdobramentos nas "
+                "próximas análises.",
+            )
+        )
 
 
 def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
@@ -287,7 +321,10 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
     ]
     patterns = _extract_historical_patterns(pattern_reports)
     if not patterns:
-        st.info("Nenhum padrão histórico salvo ainda.")
+        st.info(
+            "Nenhum padrão histórico salvo ainda. Gere uma análise de padrões históricos "
+            "na aba Análises para identificar recorrências entre documentos."
+        )
         return
 
     severity_order = {"Alta": 0, "Média": 1, "Baixa": 2}
@@ -308,7 +345,13 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
 
     high_patterns = [pattern for pattern in patterns if pattern.get("severity") == "Alta"]
     if high_patterns:
-        st.warning(f"{len(high_patterns)} padrão(ões) de alta severidade exigem atenção.")
+        st.warning(
+            _format_count_message(
+                len(high_patterns),
+                "padrão de alta severidade merece acompanhamento.",
+                "padrões de alta severidade merecem acompanhamento.",
+            )
+        )
 
 
 def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
@@ -316,7 +359,10 @@ def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
     reports = [analysis for analysis in analyses if _is_multi_agent_report(analysis)]
     findings = _extract_multi_agent_findings(reports)
     if not findings:
-        st.info("Nenhuma orquestração multiagente salva ainda.")
+        st.info(
+            "Nenhuma orquestração multiagente salva ainda. Gere uma análise multiagente "
+            "na aba Análises para comparar achados, riscos e recomendações por perspectiva."
+        )
         return
 
     severity_order = {"Alta": 0, "Média": 1, "Baixa": 2}
@@ -461,6 +507,11 @@ def _render_available_capabilities() -> None:
     for index, capability in enumerate(capabilities):
         with cols[index % 2]:
             st.info(capability)
+
+
+def _format_count_message(count: int, singular: str, plural: str) -> str:
+    message = singular if count == 1 else plural
+    return f"{count} {message}"
 
 
 def _extract_action_items(analyses: list[dict[str, object]]) -> list[dict[str, object]]:

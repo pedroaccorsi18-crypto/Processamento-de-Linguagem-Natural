@@ -134,12 +134,45 @@ def render_analysis_page(config: AppConfig) -> None:
         _document_ids(documents),
         config.openai.embedding_model,
     )
-    selected_labels = st.multiselect(
-        "Documentos usados nesta pergunta",
-        options=list(document_options.keys()),
-        default=list(document_options.keys()),
-        help="Selecione um ou mais documentos para definir o escopo da busca semântica.",
+    document_labels = list(document_options.keys())
+    st.caption(
+        "A IA usa somente os documentos do escopo abaixo. Documentos preparados continuam na "
+        "base semântica, mas não entram na análise se não estiverem selecionados."
     )
+    scope_mode = st.radio(
+        "Escopo da análise",
+        options=(
+            "Último documento enviado",
+            "Selecionar manualmente",
+            "Toda a base documental",
+        ),
+        horizontal=True,
+        help=(
+            "Use o último documento para evitar misturar assuntos diferentes. Escolha toda a "
+            "base apenas quando quiser analisar o acervo completo."
+        ),
+    )
+    if scope_mode == "Toda a base documental":
+        selected_labels = document_labels
+        st.info(
+            "Toda a base documental está no escopo. Use esta opção quando os documentos fazem "
+            "parte do mesmo contexto de análise."
+        )
+    elif scope_mode == "Selecionar manualmente":
+        selected_labels = st.multiselect(
+            "Documentos usados nesta análise",
+            options=document_labels,
+            default=document_labels[:1],
+            help="Selecione apenas documentos que pertencem ao mesmo assunto ou decisão.",
+            key="analysis-selected-documents",
+        )
+    else:
+        selected_labels = document_labels[:1]
+        if selected_labels:
+            st.info(
+                "Escopo atual: último documento enviado. Para comparar ou juntar documentos, "
+                "troque o escopo para seleção manual ou toda a base."
+            )
     selected_document_ids = [
         document_options[label]["id"]
         for label in selected_labels
@@ -191,7 +224,7 @@ def render_analysis_page(config: AppConfig) -> None:
             _render_ai_status(document, chunk_counts)
 
     documents_to_index = selected_documents
-    if st.button(f"Atualizar base semântica ({len(documents_to_index)} documento(s))"):
+    if st.button(f"Atualizar base semântica do escopo ({len(documents_to_index)} documento(s))"):
         indexed_chunks = _index_documents(
             supabase_client,
             openai_client,

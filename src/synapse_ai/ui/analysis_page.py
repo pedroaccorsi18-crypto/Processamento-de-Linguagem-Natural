@@ -215,7 +215,7 @@ def render_analysis_page(config: AppConfig) -> None:
     )
     save_to_history = st.checkbox(
         "Salvar esta análise no histórico",
-        value=False,
+        value=True,
         help="Use quando precisar manter uma trilha auditável da pergunta e da resposta.",
     )
 
@@ -231,151 +231,309 @@ def render_analysis_page(config: AppConfig) -> None:
         )
 
     st.divider()
-    st.subheader("Inteligência organizacional")
-    st.write(
-        "Extraia automaticamente decisões, riscos, inconsistências, prazos e recomendações "
-        "dos documentos selecionados."
+    _render_analysis_workflow_center(
+        supabase_client,
+        openai_client,
+        user.id,
+        config,
+        selected_document_ids,
     )
-    save_intelligence = st.checkbox(
-        "Salvar inteligência no histórico",
-        value=False,
-        help="Use quando precisar manter a fotografia estruturada para auditoria futura.",
+
+    st.divider()
+    _render_analysis_history(supabase_client, user.id)
+
+
+def _render_analysis_workflow_center(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
+    st.subheader("Central de análises")
+    st.write(
+        "Escolha uma capacidade de IA para o escopo documental atual. Os resultados ficam "
+        "salvos por padrão para alimentar Dashboard, Auditoria e relatórios executivos."
+    )
+
+    workflow_labels = [
+        "Inteligência organizacional",
+        "Comparação documental",
+        "Sentimentos organizacionais",
+        "Alertas preventivos",
+        "Padrões históricos",
+        "Orquestração multiagente",
+        "Plano de ação",
+    ]
+    default_label = _default_analysis_workflow_label(workflow_labels)
+    selected_workflow = st.selectbox(
+        "Tipo de análise",
+        workflow_labels,
+        index=workflow_labels.index(default_label),
+        help="Troque o tipo de análise sem precisar percorrer uma tela longa.",
+    )
+
+    if selected_workflow == "Inteligência organizacional":
+        _render_intelligence_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+    elif selected_workflow == "Comparação documental":
+        _render_comparison_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+    elif selected_workflow == "Sentimentos organizacionais":
+        _render_sentiment_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+    elif selected_workflow == "Alertas preventivos":
+        _render_preventive_alerts_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+    elif selected_workflow == "Padrões históricos":
+        _render_historical_patterns_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+    elif selected_workflow == "Orquestração multiagente":
+        _render_multi_agent_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+    else:
+        _render_action_plan_workflow(
+            supabase_client,
+            openai_client,
+            user_id,
+            config,
+            selected_document_ids,
+        )
+
+
+def _default_analysis_workflow_label(workflow_labels: list[str]) -> str:
+    focus_to_label = {
+        "action_plan": "Plano de ação",
+        "historical_patterns": "Padrões históricos",
+        "multi_agent": "Orquestração multiagente",
+    }
+    focused_label = focus_to_label.get(str(st.session_state.get("analysis_focus", "")))
+    return focused_label if focused_label in workflow_labels else workflow_labels[0]
+
+
+def _render_save_toggle(label: str, help_text: str, key: str) -> bool:
+    return st.checkbox(
+        label,
+        value=True,
+        help=help_text,
+        key=key,
+    )
+
+
+def _render_intelligence_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
+    st.write(
+        "Extrai decisões, riscos, inconsistências, prazos e recomendações dos documentos "
+        "selecionados."
+    )
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém a fotografia estruturada para auditoria e relatórios futuros.",
+        "save-intelligence-workflow",
     )
     if st.button("Gerar inteligência organizacional"):
         _generate_intelligence_snapshot(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_intelligence,
+            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    st.subheader("Comparação documental")
+
+def _render_comparison_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
     st.write(
-        "Compare os documentos selecionados para detectar divergências de datas, decisões, "
-        "responsáveis, riscos, escopo e evidências."
+        "Compara documentos para detectar divergências de datas, decisões, responsáveis, "
+        "riscos, escopo e evidências."
     )
-    save_comparison = st.checkbox(
-        "Salvar comparação no histórico",
-        value=False,
-        help="Use quando precisar manter as divergências encontradas para auditoria futura.",
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém as divergências encontradas para auditoria futura.",
+        "save-comparison-workflow",
     )
     if st.button("Comparar documentos selecionados"):
         _generate_document_comparison(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_comparison,
+            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    st.subheader("Sentimentos organizacionais")
+
+def _render_sentiment_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
     st.write(
-        "Analise o tom dos documentos selecionados para identificar urgência, tensão, confiança, "
-        "conflito, frustração e risco percebido com rastreabilidade."
+        "Analisa tom, urgência, tensão, confiança, conflito e risco percebido com "
+        "rastreabilidade."
     )
-    save_sentiment = st.checkbox(
-        "Salvar sentimentos no histórico",
-        value=False,
-        help="Use quando precisar manter a leitura de tom organizacional para auditoria futura.",
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém a leitura de tom organizacional para auditoria futura.",
+        "save-sentiment-workflow",
     )
     if st.button("Analisar sentimentos organizacionais"):
         _generate_sentiment_report(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_sentiment,
+            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    st.subheader("Alertas preventivos")
+
+def _render_preventive_alerts_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
     st.write(
-        "Identifique sinais que exigem atenção antes de virarem problema, como prazo crítico, "
-        "responsável ausente, risco sem plano, orçamento pendente ou decisão conflitante."
+        "Identifica sinais que exigem atenção antes de virarem problema, como prazo crítico, "
+        "responsável ausente, risco sem plano ou decisão conflitante."
     )
-    save_alerts = st.checkbox(
-        "Salvar alertas no histórico",
-        value=False,
-        help="Use quando precisar manter os alertas preventivos para acompanhamento futuro.",
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém os alertas preventivos para acompanhamento futuro.",
+        "save-alerts-workflow",
     )
     if st.button("Gerar alertas preventivos"):
         _generate_preventive_alert_report(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_alerts,
+            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    st.subheader("Padrões históricos")
+
+def _render_historical_patterns_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
     st.write(
-        "Compare os sinais atuais com análises salvas anteriormente para reconhecer riscos, "
-        "atrasos, pendências, tensões ou inconsistências que já apareceram no histórico."
+        "Compara os sinais atuais com análises já salvas para reconhecer riscos, atrasos, "
+        "pendências ou inconsistências recorrentes."
     )
-    save_patterns = st.checkbox(
-        "Salvar padrões no histórico",
-        value=False,
-        help="Use quando precisar manter a leitura de recorrência para auditoria futura.",
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém a leitura de recorrência para auditoria futura.",
+        "save-patterns-workflow",
     )
     if st.button("Reconhecer padrões históricos"):
         _generate_historical_pattern_report(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_patterns,
+            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    st.subheader("Orquestração multiagente")
+
+def _render_multi_agent_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
     st.write(
-        "Execute agentes especializados independentes para avaliar decisões, riscos, "
-        "consistência documental, sentimentos e governança antes da consolidação final."
+        "Executa agentes especializados para avaliar decisões, riscos, consistência "
+        "documental, sentimentos e governança antes da consolidação final."
     )
-    save_multi_agent = st.checkbox(
-        "Salvar orquestração no histórico",
-        value=False,
-        help="Use quando precisar manter o parecer multiagente para auditoria futura.",
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém o parecer multiagente para auditoria futura.",
+        "save-multi-agent-workflow",
     )
     if st.button("Executar agentes especializados"):
         _generate_multi_agent_report(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_multi_agent,
+            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    st.subheader("Plano de ação")
-    st.write("Transforme decisões, riscos e pendências dos documentos em uma lista acompanhável.")
-    save_action_plan = st.checkbox(
-        "Salvar plano no histórico",
-        value=False,
-        help="Use quando precisar manter esse plano disponível para consulta futura.",
+
+def _render_action_plan_workflow(
+    supabase_client: object,
+    openai_client: object,
+    user_id: str,
+    config: AppConfig,
+    selected_document_ids: list[str],
+) -> None:
+    st.write("Transforma decisões, riscos e pendências em uma lista acompanhável.")
+    save_to_history = _render_save_toggle(
+        "Salvar no histórico e atualizar Dashboard",
+        "Mantém o plano disponível no Dashboard, na Auditoria e nos relatórios.",
+        "save-action-plan-workflow",
     )
     if st.button("Gerar plano de ação com fontes"):
         _generate_action_plan(
             supabase_client,
             openai_client,
-            user.id,
+            user_id,
             config,
-            save_action_plan,
+            save_to_history,
             selected_document_ids,
         )
-
-    st.divider()
-    _render_analysis_history(supabase_client, user.id)
 
 
 def _render_analysis_focus_hint() -> None:
@@ -384,17 +542,17 @@ def _render_analysis_focus_hint() -> None:
         "action_plan": (
             "Plano de ação",
             "Selecione os documentos, confira se a base semântica está pronta e desça até "
-            "Plano de ação. Marque Salvar plano no histórico para aparecer no Dashboard.",
+            "a Central de análises. O tipo Plano de ação já estará selecionado.",
         ),
         "historical_patterns": (
             "Padrões históricos",
             "Selecione os documentos, confira se há análises anteriores salvas e desça até "
-            "Padrões históricos. Marque Salvar padrões no histórico para aparecer no Dashboard.",
+            "a Central de análises. O tipo Padrões históricos já estará selecionado.",
         ),
         "multi_agent": (
             "Orquestração multiagente",
-            "Selecione os documentos e desça até Orquestração multiagente. Marque Salvar "
-            "orquestração no histórico para aparecer no Dashboard.",
+            "Selecione os documentos e desça até a Central de análises. O tipo Orquestração "
+            "multiagente já estará selecionado.",
         ),
     }
     if focus not in hints:

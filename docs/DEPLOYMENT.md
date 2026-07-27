@@ -8,6 +8,12 @@ acessível por uma URL pública para apresentação.
 Para a entrega acadêmica, a opção mais simples é publicar o app Streamlit em um serviço gerenciado,
 mantendo o Supabase como backend remoto e a OpenAI como provedor de IA.
 
+URL pública configurada para apresentação:
+
+```text
+https://synapse-ai-pnl.streamlit.app/
+```
+
 Ordem recomendada:
 
 1. GitHub com o repositório atualizado.

@@ -168,6 +168,12 @@ streamlit run app.py
 ## Publicação web para apresentação
 
 Para sair do `localhost`, o projeto deve ser publicado em um serviço web compatível com Streamlit.
+URL pública da apresentação:
+
+```text
+https://synapse-ai-pnl.streamlit.app/
+```
+
 O fluxo recomendado para a apresentação é:
 
 1. subir o repositório atualizado para o GitHub;

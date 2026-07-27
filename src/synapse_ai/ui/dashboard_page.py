@@ -5,6 +5,8 @@ from datetime import datetime
 
 import streamlit as st
 
+from synapse_ai.application.dashboard import IntelligentExecutiveReportCommand
+from synapse_ai.application.result import ResultSeverity, UseCaseResult
 from synapse_ai.auth.session import (
     clear_session,
     get_access_token,
@@ -17,26 +19,20 @@ from synapse_ai.clients.supabase_client import create_authenticated_supabase_con
 from synapse_ai.config import AppConfig
 from synapse_ai.services.analysis_repository import list_recent_analyses
 from synapse_ai.services.analysis_service import (
-    AnalysisGenerationError,
-    build_source_snippets,
     describe_planned_analysis_capabilities,
 )
 from synapse_ai.services.chunk_repository import (
-    ChunkPersistenceError,
     list_document_chunk_counts,
-    match_document_chunks,
 )
 from synapse_ai.services.document_repository import list_user_documents
-from synapse_ai.services.embedding_service import EmbeddingGenerationError, generate_embeddings
 from synapse_ai.services.report_service import (
-    ReportGenerationError,
     build_executive_report,
     executive_report_to_markdown,
     executive_report_to_pdf,
-    generate_intelligent_executive_report,
     intelligent_report_to_markdown,
     intelligent_report_to_pdf,
 )
+from synapse_ai.ui.dashboard_use_cases import build_intelligent_executive_report_use_case
 
 
 @dataclass(frozen=True)
@@ -53,6 +49,8 @@ class DashboardSummary:
     critical_preventive_alerts: int
     historical_pattern_reports: int
     historical_patterns: int
+    multi_agent_reports: int
+    multi_agent_findings: int
     action_plans: int
     action_items: int
     high_priority_items: int
@@ -105,6 +103,7 @@ def render_dashboard_page(config: AppConfig) -> None:
     _render_document_health(documents, chunk_counts)
     _render_preventive_alerts(analyses)
     _render_historical_patterns(analyses)
+    _render_multi_agent_findings(analyses)
     _render_action_intelligence(analyses)
     _render_executive_report_downloads(
         client,
@@ -142,6 +141,8 @@ def build_dashboard_summary(
         analysis for analysis in analyses if _is_historical_pattern_report(analysis)
     ]
     historical_patterns = _extract_historical_patterns(historical_pattern_reports)
+    multi_agent_reports = [analysis for analysis in analyses if _is_multi_agent_report(analysis)]
+    multi_agent_findings = _extract_multi_agent_findings(multi_agent_reports)
     action_items = _extract_action_items(action_plans)
     return DashboardSummary(
         total_documents=len(documents),
@@ -158,6 +159,8 @@ def build_dashboard_summary(
         ),
         historical_pattern_reports=len(historical_pattern_reports),
         historical_patterns=len(historical_patterns),
+        multi_agent_reports=len(multi_agent_reports),
+        multi_agent_findings=len(multi_agent_findings),
         action_plans=len(action_plans),
         action_items=len(action_items),
         high_priority_items=sum(1 for item in action_items if item.get("priority") == "Alta"),
@@ -178,7 +181,7 @@ def _render_summary_metrics(summary: DashboardSummary) -> None:
     second_row[0].metric("Pendentes de preparação", summary.pending_documents)
     second_row[1].metric("Alertas preventivos", summary.preventive_alerts)
     second_row[2].metric("Alertas críticos", summary.critical_preventive_alerts)
-    second_row[3].metric("Planos de ação", summary.action_plans)
+    second_row[3].metric("Multiagente", summary.multi_agent_reports)
     second_row[4].metric("Padrões históricos", summary.historical_patterns)
     second_row[5].metric("A confirmar", summary.items_to_confirm)
 
@@ -308,6 +311,31 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
         st.warning(f"{len(high_patterns)} padrão(ões) de alta severidade exigem atenção.")
 
 
+def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
+    st.subheader("Orquestração multiagente")
+    reports = [analysis for analysis in analyses if _is_multi_agent_report(analysis)]
+    findings = _extract_multi_agent_findings(reports)
+    if not findings:
+        st.info("Nenhuma orquestração multiagente salva ainda.")
+        return
+
+    severity_order = {"Alta": 0, "Média": 1, "Baixa": 2}
+    rows = [
+        {
+            "Agente": finding.get("agent_name", ""),
+            "Achado": finding.get("title", ""),
+            "Categoria": finding.get("category", ""),
+            "Severidade": finding.get("severity", ""),
+            "Recomendação": finding.get("recommendation", ""),
+        }
+        for finding in sorted(
+            findings,
+            key=lambda item: severity_order.get(str(item.get("severity", "")), 3),
+        )[:10]
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
 def _render_executive_report_downloads(
     supabase_client: object,
     openai_client: object,
@@ -370,40 +398,28 @@ def _generate_intelligent_report_downloads(
     analyses: list[dict[str, object]],
     prepared_document_ids: list[str],
 ) -> None:
-    try:
-        with st.spinner("Recuperando evidências da base semântica..."):
-            query_embedding = generate_embeddings(
-                openai_client,
-                [_executive_report_query()],
-                config.openai.embedding_model,
-            )[0]
-            matches = match_document_chunks(
-                supabase_client,
-                user_id,
-                query_embedding,
-                document_ids=prepared_document_ids,
-                limit=10,
+    intelligent_report_use_case = build_intelligent_executive_report_use_case()
+    with st.spinner("Gerando relatório executivo inteligente..."):
+        result = intelligent_report_use_case.execute(
+            IntelligentExecutiveReportCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                documents=documents,
+                analyses=analyses,
+                prepared_document_ids=prepared_document_ids,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
             )
-            sources = build_source_snippets(matches)
-        if not sources:
-            st.info("Nenhuma evidência relevante foi encontrada para compor o relatório.")
-            return
-        with st.spinner("Gerando relatório executivo inteligente..."):
-            report = generate_intelligent_executive_report(
-                openai_client,
-                sources,
-                documents,
-                analyses,
-                config.openai.generation_model,
-            )
-    except (
-        AnalysisGenerationError,
-        ChunkPersistenceError,
-        EmbeddingGenerationError,
-        ReportGenerationError,
-    ) as exc:
-        st.error(str(exc))
+        )
+    if not result.success:
+        _render_use_case_message(result)
         return
+
+    output = result.value
+    if output is None:
+        return
+    report = output.report
 
     st.success("Relatório executivo com IA gerado.")
     st.markdown("**Síntese executiva**")
@@ -427,11 +443,15 @@ def _generate_intelligent_report_downloads(
     )
 
 
-def _executive_report_query() -> str:
-    return (
-        "decisões, riscos, inconsistências, responsáveis, prazos, pendências, recomendações, "
-        "impactos, evidências e plano de ação executivo"
-    )
+def _render_use_case_message(result: UseCaseResult[object]) -> None:
+    if result.severity == ResultSeverity.WARNING:
+        st.warning(result.message)
+    elif result.severity == ResultSeverity.ERROR:
+        st.error(result.message)
+    elif result.severity == ResultSeverity.SUCCESS:
+        st.success(result.message)
+    else:
+        st.info(result.message)
 
 
 def _render_available_capabilities() -> None:
@@ -488,6 +508,30 @@ def _extract_historical_patterns(analyses: list[dict[str, object]]) -> list[dict
     return patterns
 
 
+def _extract_multi_agent_findings(analyses: list[dict[str, object]]) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for analysis in analyses:
+        metadata = analysis.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        raw_outputs = metadata.get("agent_outputs")
+        if not isinstance(raw_outputs, list):
+            continue
+        for raw_output in raw_outputs:
+            if not isinstance(raw_output, dict):
+                continue
+            agent_name = str(raw_output.get("agent_name") or "")
+            raw_findings = raw_output.get("findings")
+            if not isinstance(raw_findings, list):
+                continue
+            for raw_finding in raw_findings:
+                if isinstance(raw_finding, dict):
+                    finding = dict(raw_finding)
+                    finding["agent_name"] = agent_name
+                    findings.append(finding)
+    return findings
+
+
 def _is_action_plan(analysis: dict[str, object]) -> bool:
     metadata = analysis.get("metadata")
     return isinstance(metadata, dict) and metadata.get("artifact_type") == "action_plan"
@@ -522,6 +566,11 @@ def _is_historical_pattern_report(analysis: dict[str, object]) -> bool:
         isinstance(metadata, dict)
         and metadata.get("artifact_type") == "historical_pattern_report"
     )
+
+
+def _is_multi_agent_report(analysis: dict[str, object]) -> bool:
+    metadata = analysis.get("metadata")
+    return isinstance(metadata, dict) and metadata.get("artifact_type") == "multi_agent_report"
 
 
 def _requires_confirmation(item: dict[str, object]) -> bool:

@@ -84,6 +84,7 @@ def describe_planned_analysis_capabilities() -> list[str]:
         "Análise de sentimentos organizacionais com evidências",
         "Alertas preventivos para riscos, prazos e lacunas de responsabilidade",
         "Reconhecimento de padrões históricos a partir de análises salvas",
+        "Agentes especializados reais com orquestração de consensos e conflitos",
     ]
 
 

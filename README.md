@@ -25,7 +25,12 @@ Implementado até agora:
 - schema SQL planejado para Supabase;
 - testes automatizados;
 - configuração de lint com Ruff;
-- upload de PDF, DOCX, TXT e MD;
+- upload de PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON, VTT, EML e arquivos de áudio;
+- transcrição automática de áudios para análise textual;
+- ingestão estruturada de exportações de tickets/Jira em CSV e XLSX;
+- ingestão estruturada de exportações de Slack em JSON;
+- ingestão estruturada de mensagens e transcrições do Microsoft Teams em JSON e VTT;
+- importação de arquivos de pastas compartilhadas do Google Drive via OAuth;
 - extração textual local;
 - armazenamento privado do arquivo original para download futuro;
 - metadados básicos;
@@ -43,15 +48,14 @@ Implementado até agora:
 - análise de sentimentos organizacionais, incluindo urgência, tensão, confiança, conflito e risco percebido;
 - geração de alertas preventivos para prazos críticos, responsáveis ausentes, riscos e lacunas de evidência;
 - reconhecimento de padrões históricos a partir de análises salvas;
+- orquestração multiagente real com agentes de decisões, riscos, consistência, sentimentos e governança;
 - dashboard executivo;
 - relatórios executivos com IA;
 - auditoria de fontes com exportação em PDF e Markdown.
 
 Ainda não implementado:
 
-- conectores reais para Teams, Slack, Jira, e-mail e SharePoint;
-- agentes especializados;
-- alertas preventivos;
+- conectores privados com OAuth para Teams, Slack, Jira, SharePoint, CRM e ERP além do Google Drive;
 - versionamento avançado de documentos.
 
 ## Stack
@@ -109,8 +113,11 @@ Instale as dependências:
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 ```
+
+Para ambiente publicado, `requirements.txt` já instala o pacote local e as dependências de runtime.
+O extra `.[dev]` é usado apenas para testes, lint e type checking no desenvolvimento.
 
 ## Configuração de segredos
 
@@ -125,9 +132,21 @@ publishable_key = "sb_publishable_EXEMPLO"
 api_key = "sk-proj-EXEMPLO"
 embedding_model = "text-embedding-3-small"
 generation_model = "gpt-5-mini"
+transcription_model = "gpt-4o-mini-transcribe"
+
+[google_drive]
+api_key = ""
+client_id = "GOOGLE_OAUTH_CLIENT_ID_EXEMPLO"
+client_secret = "GOOGLE_OAUTH_CLIENT_SECRET_EXEMPLO"
+redirect_uri = "http://localhost:8501"
 ```
 
 O repositório inclui `.streamlit/secrets.example.toml` apenas como exemplo sem credenciais reais.
+
+Para produto real, o caminho recomendado para Google Drive é OAuth. A empresa cria um cliente OAuth
+no Google Cloud, autoriza o Synapse AI e o sistema usa um token de acesso com escopo somente leitura
+do Drive. A opção `google_drive.api_key` existe apenas como compatibilidade para demonstrações com
+pastas compartilhadas.
 
 ## Supabase
 
@@ -145,6 +164,24 @@ O script cria tabelas para `profiles`, `documents`, `document_chunks` e `analyse
 ```powershell
 streamlit run app.py
 ```
+
+## Publicação web para apresentação
+
+Para sair do `localhost`, o projeto deve ser publicado em um serviço web compatível com Streamlit.
+O fluxo recomendado para a apresentação é:
+
+1. subir o repositório atualizado para o GitHub;
+2. publicar o app em Streamlit Community Cloud, Render, Railway ou serviço equivalente;
+3. configurar no ambiente web os mesmos segredos de `.streamlit/secrets.toml`;
+4. manter Supabase como backend remoto;
+5. cadastrar a URL pública do app como redirect URI autorizado no Google Cloud OAuth;
+6. testar login, upload, Google Drive, preparação semântica, análises e download de relatórios na URL final.
+
+Sem a URL pública cadastrada no Google Cloud, o OAuth do Google Drive continuará funcionando apenas no
+endereço local configurado.
+
+Guia detalhado: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Roteiro de demonstração: [`docs/PRESENTATION_CHECKLIST.md`](docs/PRESENTATION_CHECKLIST.md).
 
 ## Testes
 
@@ -199,4 +236,7 @@ Fase 4 — Intelligence
 
 ## Limitações
 
-Esta versão entrega a fundação técnica, a camada inicial de dados e uma primeira camada RAG. A página de upload processa documentos localmente e persiste texto/metadados no Supabase. A página de análises depende do `schema.sql` atualizado, de documentos salvos e da preparação semântica dos documentos antes das perguntas.
+Esta versão entrega a fundação técnica, a camada de dados, RAG e análises organizacionais avançadas.
+A página de upload processa documentos localmente e persiste texto/metadados no Supabase. A página
+de análises depende do `schema.sql` atualizado, de documentos salvos e da preparação semântica dos
+documentos antes das perguntas.

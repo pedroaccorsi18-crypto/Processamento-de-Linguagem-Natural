@@ -37,6 +37,24 @@ def test_build_dashboard_summary_counts_documents_and_action_items() -> None:
         },
         {
             "metadata": {
+                "artifact_type": "multi_agent_report",
+                "agent_outputs": [
+                    {
+                        "agent_name": "Agente de Riscos",
+                        "findings": [
+                            {
+                                "title": "Aprovação pendente",
+                                "category": "Risco",
+                                "severity": "Alta",
+                                "recommendation": "Escalar validação.",
+                            }
+                        ],
+                    }
+                ],
+            }
+        },
+        {
+            "metadata": {
                 "artifact_type": "action_plan",
                 "items": [
                     {
@@ -62,7 +80,7 @@ def test_build_dashboard_summary_counts_documents_and_action_items() -> None:
     assert summary.total_documents == 2
     assert summary.prepared_documents == 1
     assert summary.pending_documents == 1
-    assert summary.saved_analyses == 7
+    assert summary.saved_analyses == 8
     assert summary.intelligence_snapshots == 1
     assert summary.document_comparisons == 1
     assert summary.sentiment_reports == 1
@@ -71,6 +89,8 @@ def test_build_dashboard_summary_counts_documents_and_action_items() -> None:
     assert summary.critical_preventive_alerts == 1
     assert summary.historical_pattern_reports == 1
     assert summary.historical_patterns == 1
+    assert summary.multi_agent_reports == 1
+    assert summary.multi_agent_findings == 1
     assert summary.action_plans == 1
     assert summary.action_items == 2
     assert summary.high_priority_items == 1
@@ -92,4 +112,6 @@ def test_build_dashboard_summary_handles_empty_state() -> None:
     assert summary.critical_preventive_alerts == 0
     assert summary.historical_pattern_reports == 0
     assert summary.historical_patterns == 0
+    assert summary.multi_agent_reports == 0
+    assert summary.multi_agent_findings == 0
     assert summary.action_plans == 0

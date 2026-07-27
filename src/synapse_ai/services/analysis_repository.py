@@ -3,6 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from synapse_ai.services.agent_service import (
+    MultiAgentReport,
+    multi_agent_report_to_markdown,
+    serialize_agent_outputs,
+)
 from synapse_ai.services.alert_service import (
     PreventiveAlertReport,
     preventive_alert_report_to_markdown,
@@ -315,6 +320,52 @@ def save_historical_pattern_report_result(
         logger.warning("Historical pattern persistence failed: %s", exc.__class__.__name__)
         raise AnalysisPersistenceError(
             "Não foi possível salvar os padrões históricos."
+        ) from exc
+
+    data = getattr(response, "data", None)
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        return data[0]
+    if isinstance(data, dict):
+        return data
+    return payload
+
+
+def save_multi_agent_report_result(
+    client: Any,
+    user_id: str,
+    report: MultiAgentReport,
+    generation_model: str,
+) -> dict[str, Any]:
+    agent_outputs = serialize_agent_outputs(report.agent_outputs)
+    payload = {
+        "user_id": user_id,
+        "document_id": _first_source_document_id(report.sources),
+        "title": "Orquestração multiagente gerada",
+        "question": "Executar agentes especializados sobre o escopo documental atual.",
+        "answer": multi_agent_report_to_markdown(report),
+        "sources": serialize_sources(report.sources),
+        "model": generation_model,
+        "status": "ready",
+        "metadata": {
+            "artifact_type": "multi_agent_report",
+            "agent_count": len(report.agent_outputs),
+            "finding_count": sum(len(output.findings) for output in report.agent_outputs),
+            "historical_record_count": report.historical_record_count,
+            "consensus": report.consensus,
+            "conflicts": report.conflicts,
+            "recommendations": report.recommendations,
+            "agent_outputs": agent_outputs,
+            "source_count": len(report.sources),
+            "source_filenames": sorted({source.filename for source in report.sources}),
+        },
+    }
+
+    try:
+        response = client.table("analyses").insert(payload).execute()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Multi-agent report persistence failed: %s", exc.__class__.__name__)
+        raise AnalysisPersistenceError(
+            "Não foi possível salvar a orquestração multiagente."
         ) from exc
 
     data = getattr(response, "data", None)

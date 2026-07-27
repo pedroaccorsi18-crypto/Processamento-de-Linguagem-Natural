@@ -11,7 +11,12 @@ from synapse_ai.ui.home_page import render_home_page
 from synapse_ai.ui.login_page import render_login_page
 from synapse_ai.ui.navigation import private_navigation, public_navigation
 from synapse_ai.ui.register_page import render_register_page
-from synapse_ai.ui.upload_page import render_upload_page
+from synapse_ai.ui.upload_page import (
+    has_google_drive_oauth_return,
+    render_google_drive_oauth_return_without_session,
+    render_upload_page,
+    restore_google_drive_oauth_synapse_session,
+)
 from synapse_ai.utils.logging_utils import configure_logging
 
 
@@ -42,6 +47,13 @@ def main() -> None:
             render_analysis_page(config)
         elif selected_page == "audit":
             render_audit_page(config)
+        return
+
+    if has_google_drive_oauth_return():
+        if restore_google_drive_oauth_synapse_session():
+            render_upload_page(config)
+            return
+        render_google_drive_oauth_return_without_session(config)
         return
 
     selected_page = public_navigation()

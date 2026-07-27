@@ -23,6 +23,8 @@ def test_load_config_from_injected_mapping() -> None:
     assert config.openai.api_key == "openai-key"
     assert config.openai.embedding_model == "text-embedding-3-small"
     assert config.openai.generation_model == "gpt-5-mini"
+    assert config.openai.transcription_model == "gpt-4o-mini-transcribe"
+    assert config.google_drive.api_key == ""
 
 
 def test_load_config_reports_missing_setting_name_only() -> None:

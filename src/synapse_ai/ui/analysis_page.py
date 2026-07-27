@@ -5,6 +5,18 @@ from datetime import datetime
 
 import streamlit as st
 
+from synapse_ai.application.analysis import (
+    ActionPlanCommand,
+    AskQuestionCommand,
+    DocumentComparisonCommand,
+    HistoricalPatternsCommand,
+    IntelligenceSnapshotCommand,
+    MultiAgentReportCommand,
+    PreventiveAlertsCommand,
+    SentimentAnalysisCommand,
+)
+from synapse_ai.application.indexing import PrepareSemanticBaseCommand
+from synapse_ai.application.result import ResultSeverity, UseCaseResult
 from synapse_ai.auth.session import (
     get_access_token,
     get_current_session_user,
@@ -14,76 +26,63 @@ from synapse_ai.auth.session import (
 from synapse_ai.clients.openai_client import create_openai_client
 from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
+from synapse_ai.services.agent_service import (
+    MultiAgentReport,
+    multi_agent_report_to_csv,
+    multi_agent_report_to_markdown,
+    multi_agent_report_to_xlsx,
+)
 from synapse_ai.services.alert_service import (
-    AlertGenerationError,
     PreventiveAlertReport,
-    generate_preventive_alert_report,
     preventive_alert_report_to_csv,
     preventive_alert_report_to_markdown,
     preventive_alert_report_to_xlsx,
 )
 from synapse_ai.services.analysis_repository import (
-    AnalysisPersistenceError,
     list_recent_analyses,
-    save_action_plan_result,
-    save_analysis_result,
-    save_document_comparison_result,
-    save_historical_pattern_report_result,
-    save_intelligence_snapshot_result,
-    save_preventive_alert_report_result,
-    save_sentiment_report_result,
 )
 from synapse_ai.services.analysis_service import (
     ActionPlan,
-    AnalysisGenerationError,
-    SourceSnippet,
     action_plan_to_csv,
     action_plan_to_markdown,
     action_plan_to_xlsx,
-    build_source_snippets,
-    generate_action_plan,
-    generate_rag_answer,
 )
-from synapse_ai.services.chunk_repository import (
-    ChunkPersistenceError,
-    list_document_chunk_counts,
-    match_document_chunks,
-    replace_document_chunks,
-)
-from synapse_ai.services.chunking_service import split_text_into_chunks
+from synapse_ai.services.chunk_repository import list_document_chunk_counts
 from synapse_ai.services.comparison_service import (
-    ComparisonGenerationError,
     DocumentComparisonReport,
     document_comparison_to_csv,
     document_comparison_to_markdown,
     document_comparison_to_xlsx,
-    generate_document_comparison,
 )
 from synapse_ai.services.document_repository import list_user_documents_for_processing
-from synapse_ai.services.embedding_service import EmbeddingGenerationError, generate_embeddings
 from synapse_ai.services.intelligence_service import (
-    IntelligenceGenerationError,
     IntelligenceSnapshot,
-    generate_intelligence_snapshot,
     intelligence_snapshot_to_csv,
     intelligence_snapshot_to_markdown,
     intelligence_snapshot_to_xlsx,
 )
 from synapse_ai.services.pattern_service import (
     HistoricalPatternReport,
-    PatternGenerationError,
-    generate_historical_pattern_report,
     historical_pattern_report_to_csv,
     historical_pattern_report_to_markdown,
     historical_pattern_report_to_xlsx,
 )
 from synapse_ai.services.sentiment_service import (
-    SentimentGenerationError,
     SentimentReport,
-    generate_sentiment_report,
     sentiment_report_to_csv,
     sentiment_report_to_markdown,
     sentiment_report_to_xlsx,
+)
+from synapse_ai.ui.analysis_use_cases import (
+    build_action_plan_use_case,
+    build_ask_question_use_case,
+    build_document_comparison_use_case,
+    build_historical_patterns_use_case,
+    build_intelligence_snapshot_use_case,
+    build_multi_agent_report_use_case,
+    build_prepare_semantic_base_use_case,
+    build_preventive_alerts_use_case,
+    build_sentiment_analysis_use_case,
 )
 
 
@@ -332,6 +331,27 @@ def render_analysis_page(config: AppConfig) -> None:
         )
 
     st.divider()
+    st.subheader("Orquestração multiagente")
+    st.write(
+        "Execute agentes especializados independentes para avaliar decisões, riscos, "
+        "consistência documental, sentimentos e governança antes da consolidação final."
+    )
+    save_multi_agent = st.checkbox(
+        "Salvar orquestração no histórico",
+        value=False,
+        help="Use quando precisar manter o parecer multiagente para auditoria futura.",
+    )
+    if st.button("Executar agentes especializados"):
+        _generate_multi_agent_report(
+            supabase_client,
+            openai_client,
+            user.id,
+            config,
+            save_multi_agent,
+            selected_document_ids,
+        )
+
+    st.divider()
     st.subheader("Plano de ação")
     st.write("Transforme decisões, riscos e pendências dos documentos em uma lista acompanhável.")
     save_action_plan = st.checkbox(
@@ -360,40 +380,25 @@ def _index_documents(
     documents: list[dict[str, object]],
     config: AppConfig,
 ) -> int | None:
-    indexed_chunks = 0
-    try:
-        with st.spinner("Gerando chunks e embeddings..."):
-            for document in documents:
-                document_id = str(document.get("id") or "")
-                filename = str(document.get("filename") or "Documento sem nome")
-                extracted_text = document.get("extracted_text")
-                if (
-                    not document_id
-                    or not isinstance(extracted_text, str)
-                    or not extracted_text.strip()
-                ):
-                    continue
-
-                chunks = split_text_into_chunks(extracted_text)
-                embeddings = generate_embeddings(
-                    openai_client,
-                    [chunk.content for chunk in chunks],
-                    config.openai.embedding_model,
-                )
-                indexed_chunks += replace_document_chunks(
-                    supabase_client,
-                    user_id,
-                    document_id,
-                    filename,
-                    chunks,
-                    embeddings,
-                    config.openai.embedding_model,
-                )
-    except (ChunkPersistenceError, EmbeddingGenerationError) as exc:
-        st.error(str(exc))
+    prepare_semantic_base_use_case = build_prepare_semantic_base_use_case()
+    with st.spinner("Gerando chunks e embeddings..."):
+        result = prepare_semantic_base_use_case.execute(
+            PrepareSemanticBaseCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                documents=documents,
+                embedding_model=config.openai.embedding_model,
+            )
+        )
+    if not result.success:
+        _render_use_case_message(result)
         return None
 
-    return indexed_chunks
+    output = result.value
+    if output is None:
+        return None
+    return output.indexed_chunks
 
 
 def _answer_question(
@@ -405,61 +410,51 @@ def _answer_question(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    clean_question = question.strip()
-    if not clean_question:
-        st.warning("Digite uma pergunta antes de consultar a base.")
-        return
-
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            clean_question,
-            config,
-            selected_document_ids,
+    ask_question_use_case = build_ask_question_use_case()
+    result = ask_question_use_case.execute(
+        AskQuestionCommand(
+            supabase_client=supabase_client,
+            openai_client=openai_client,
+            user_id=user_id,
+            question=question,
+            embedding_model=config.openai.embedding_model,
+            generation_model=config.openai.generation_model,
+            save_to_history=save_to_history,
+            selected_document_ids=selected_document_ids,
         )
-
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de perguntar sobre este escopo."
-            )
-            return
-
-        with st.spinner("Gerando resposta com rastreabilidade..."):
-            rag_answer = generate_rag_answer(
-                openai_client,
-                clean_question,
-                sources,
-                config.openai.generation_model,
-            )
-    except (AnalysisGenerationError, ChunkPersistenceError, EmbeddingGenerationError) as exc:
-        st.error(str(exc))
+    )
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    st.markdown(rag_answer.answer)
-    if save_to_history:
-        try:
-            save_analysis_result(
-                supabase_client,
-                user_id,
-                clean_question,
-                rag_answer,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Análise salva no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    st.markdown(output.rag_answer.answer)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Análise salva no histórico.")
     else:
         st.info("Análise exibida sem salvar no histórico.")
 
     with st.expander("Fontes recuperadas"):
-        for index, source in enumerate(rag_answer.sources, start=1):
+        for index, source in enumerate(output.rag_answer.sources, start=1):
             st.markdown(f"**Fonte {index}: {source.filename}**")
             st.caption(f"Trecho {source.chunk_index} | similaridade {source.similarity:.3f}")
             st.write(source.content)
+
+
+def _render_use_case_message(result: UseCaseResult[object]) -> None:
+    if result.severity == ResultSeverity.WARNING:
+        st.warning(result.message)
+    elif result.severity == ResultSeverity.ERROR:
+        st.error(result.message)
+    elif result.severity == ResultSeverity.SUCCESS:
+        st.success(result.message)
+    else:
+        st.info(result.message)
 
 
 def _generate_action_plan(
@@ -470,50 +465,32 @@ def _generate_action_plan(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    action_plan_query = (
-        "decisões, responsáveis, prazos, riscos, pendências, ações recomendadas "
-        "e critérios de aceite"
-    )
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            action_plan_query,
-            config,
-            selected_document_ids,
-            limit=8,
+    action_plan_use_case = build_action_plan_use_case()
+    with st.spinner("Gerando plano de ação com fontes..."):
+        result = action_plan_use_case.execute(
+            ActionPlanCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de gerar o plano."
-            )
-            return
-
-        with st.spinner("Gerando plano de ação com fontes..."):
-            action_plan = generate_action_plan(
-                openai_client,
-                sources,
-                config.openai.generation_model,
-            )
-    except (AnalysisGenerationError, ChunkPersistenceError, EmbeddingGenerationError) as exc:
-        st.error(str(exc))
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    _render_action_plan(action_plan)
-    if save_to_history:
-        try:
-            save_action_plan_result(
-                supabase_client,
-                user_id,
-                action_plan,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Plano de ação salvo no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    _render_action_plan(output.action_plan)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Plano de ação salvo no histórico.")
     else:
         st.info("Plano exibido sem salvar no histórico.")
 
@@ -526,55 +503,32 @@ def _generate_intelligence_snapshot(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    intelligence_query = (
-        "decisões, riscos, inconsistências, pendências, prazos críticos, responsáveis, "
-        "dependências e recomendações estratégicas"
-    )
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            intelligence_query,
-            config,
-            selected_document_ids,
-            limit=10,
+    intelligence_snapshot_use_case = build_intelligence_snapshot_use_case()
+    with st.spinner("Extraindo inteligência organizacional..."):
+        result = intelligence_snapshot_use_case.execute(
+            IntelligenceSnapshotCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de gerar inteligência organizacional."
-            )
-            return
-
-        with st.spinner("Extraindo inteligência organizacional..."):
-            snapshot = generate_intelligence_snapshot(
-                openai_client,
-                sources,
-                config.openai.generation_model,
-            )
-    except (
-        AnalysisGenerationError,
-        ChunkPersistenceError,
-        EmbeddingGenerationError,
-        IntelligenceGenerationError,
-    ) as exc:
-        st.error(str(exc))
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    _render_intelligence_snapshot(snapshot)
-    if save_to_history:
-        try:
-            save_intelligence_snapshot_result(
-                supabase_client,
-                user_id,
-                snapshot,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Inteligência organizacional salva no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    _render_intelligence_snapshot(output.snapshot)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Inteligência organizacional salva no histórico.")
     else:
         st.info("Inteligência exibida sem salvar no histórico.")
 
@@ -587,59 +541,32 @@ def _generate_document_comparison(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    if len(set(selected_document_ids)) < 2:
-        st.warning("Selecione pelo menos dois documentos para executar a comparação documental.")
-        return
-
-    comparison_query = (
-        "comparar documentos, datas conflitantes, decisões divergentes, responsáveis diferentes, "
-        "riscos omitidos, mudanças de cronograma, escopo inconsistente e evidências conflitantes"
-    )
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            comparison_query,
-            config,
-            selected_document_ids,
-            limit=12,
+    document_comparison_use_case = build_document_comparison_use_case()
+    with st.spinner("Comparando documentos selecionados..."):
+        result = document_comparison_use_case.execute(
+            DocumentComparisonCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de comparar os documentos."
-            )
-            return
-
-        with st.spinner("Comparando documentos selecionados..."):
-            report = generate_document_comparison(
-                openai_client,
-                sources,
-                config.openai.generation_model,
-            )
-    except (
-        AnalysisGenerationError,
-        ChunkPersistenceError,
-        ComparisonGenerationError,
-        EmbeddingGenerationError,
-    ) as exc:
-        st.error(str(exc))
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    _render_document_comparison(report)
-    if save_to_history:
-        try:
-            save_document_comparison_result(
-                supabase_client,
-                user_id,
-                report,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Comparação documental salva no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    _render_document_comparison(output.report)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Comparação documental salva no histórico.")
     else:
         st.info("Comparação exibida sem salvar no histórico.")
 
@@ -652,55 +579,32 @@ def _generate_sentiment_report(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    sentiment_query = (
-        "sentimento organizacional, tom comunicacional, urgência, tensão, confiança, conflito, "
-        "frustração, alinhamento, risco percebido e sinais emocionais em documentos corporativos"
-    )
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            sentiment_query,
-            config,
-            selected_document_ids,
-            limit=10,
+    sentiment_analysis_use_case = build_sentiment_analysis_use_case()
+    with st.spinner("Analisando sentimentos organizacionais..."):
+        result = sentiment_analysis_use_case.execute(
+            SentimentAnalysisCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de analisar sentimentos."
-            )
-            return
-
-        with st.spinner("Analisando sentimentos organizacionais..."):
-            report = generate_sentiment_report(
-                openai_client,
-                sources,
-                config.openai.generation_model,
-            )
-    except (
-        AnalysisGenerationError,
-        ChunkPersistenceError,
-        EmbeddingGenerationError,
-        SentimentGenerationError,
-    ) as exc:
-        st.error(str(exc))
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    _render_sentiment_report(report)
-    if save_to_history:
-        try:
-            save_sentiment_report_result(
-                supabase_client,
-                user_id,
-                report,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Análise de sentimentos organizacionais salva no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    _render_sentiment_report(output.report)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Análise de sentimentos organizacionais salva no histórico.")
     else:
         st.info("Análise de sentimentos exibida sem salvar no histórico.")
 
@@ -713,56 +617,32 @@ def _generate_preventive_alert_report(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    alert_query = (
-        "alertas preventivos, prazo crítico, risco alto, orçamento pendente, responsável ausente, "
-        "decisão conflitante, mudança de cronograma, dependência externa, comunicação crítica "
-        "e lacuna de evidência"
-    )
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            alert_query,
-            config,
-            selected_document_ids,
-            limit=12,
+    preventive_alerts_use_case = build_preventive_alerts_use_case()
+    with st.spinner("Gerando alertas preventivos..."):
+        result = preventive_alerts_use_case.execute(
+            PreventiveAlertsCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de gerar alertas preventivos."
-            )
-            return
-
-        with st.spinner("Gerando alertas preventivos..."):
-            report = generate_preventive_alert_report(
-                openai_client,
-                sources,
-                config.openai.generation_model,
-            )
-    except (
-        AlertGenerationError,
-        AnalysisGenerationError,
-        ChunkPersistenceError,
-        EmbeddingGenerationError,
-    ) as exc:
-        st.error(str(exc))
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    _render_preventive_alert_report(report)
-    if save_to_history:
-        try:
-            save_preventive_alert_report_result(
-                supabase_client,
-                user_id,
-                report,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Alertas preventivos salvos no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    _render_preventive_alert_report(output.report)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Alertas preventivos salvos no histórico.")
     else:
         st.info("Alertas preventivos exibidos sem salvar no histórico.")
 
@@ -775,85 +655,72 @@ def _generate_historical_pattern_report(
     save_to_history: bool,
     selected_document_ids: list[str],
 ) -> None:
-    pattern_query = (
-        "padrões históricos, recorrência, riscos repetidos, atrasos recorrentes, orçamento "
-        "pendente, responsáveis ausentes, tensão comunicacional, inconsistências repetidas "
-        "e decisões conflitantes"
-    )
-    historical_analyses = list_recent_analyses(supabase_client, user_id, limit=30)
-    try:
-        sources = _retrieve_sources(
-            supabase_client,
-            openai_client,
-            user_id,
-            pattern_query,
-            config,
-            selected_document_ids,
-            limit=12,
+    historical_patterns_use_case = build_historical_patterns_use_case()
+    with st.spinner("Reconhecendo padrões históricos..."):
+        result = historical_patterns_use_case.execute(
+            HistoricalPatternsCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        if not sources:
-            st.info(
-                "Nenhum trecho relevante foi encontrado. "
-                "Atualize a base semântica antes de reconhecer padrões históricos."
-            )
-            return
-
-        with st.spinner("Reconhecendo padrões históricos..."):
-            report = generate_historical_pattern_report(
-                openai_client,
-                sources,
-                historical_analyses,
-                config.openai.generation_model,
-            )
-    except (
-        AnalysisGenerationError,
-        ChunkPersistenceError,
-        EmbeddingGenerationError,
-        PatternGenerationError,
-    ) as exc:
-        st.error(str(exc))
+    if not result.success:
+        _render_use_case_message(result)
         return
 
-    _render_historical_pattern_report(report)
-    if save_to_history:
-        try:
-            save_historical_pattern_report_result(
-                supabase_client,
-                user_id,
-                report,
-                config.openai.generation_model,
-            )
-        except AnalysisPersistenceError as exc:
-            st.warning(str(exc))
-        else:
-            st.success("Padrões históricos salvos no histórico.")
+    output = result.value
+    if output is None:
+        return
+
+    _render_historical_pattern_report(output.report)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Padrões históricos salvos no histórico.")
     else:
         st.info("Padrões históricos exibidos sem salvar no histórico.")
 
 
-def _retrieve_sources(
+def _generate_multi_agent_report(
     supabase_client: object,
     openai_client: object,
     user_id: str,
-    query: str,
     config: AppConfig,
+    save_to_history: bool,
     selected_document_ids: list[str],
-    limit: int = 5,
-) -> list[SourceSnippet]:
-    with st.spinner("Buscando trechos relevantes..."):
-        query_embedding = generate_embeddings(
-            openai_client,
-            [query],
-            config.openai.embedding_model,
-        )[0]
-        matches = match_document_chunks(
-            supabase_client,
-            user_id,
-            query_embedding,
-            document_ids=selected_document_ids,
-            limit=limit,
+) -> None:
+    multi_agent_report_use_case = build_multi_agent_report_use_case()
+    with st.spinner("Executando agentes especializados..."):
+        result = multi_agent_report_use_case.execute(
+            MultiAgentReportCommand(
+                supabase_client=supabase_client,
+                openai_client=openai_client,
+                user_id=user_id,
+                embedding_model=config.openai.embedding_model,
+                generation_model=config.openai.generation_model,
+                save_to_history=save_to_history,
+                selected_document_ids=selected_document_ids,
+            )
         )
-        return build_source_snippets(matches)
+    if not result.success:
+        _render_use_case_message(result)
+        return
+
+    output = result.value
+    if output is None:
+        return
+
+    _render_multi_agent_report(output.report)
+    if output.persistence_warning:
+        st.warning(output.persistence_warning)
+    elif output.saved_to_history:
+        st.success("Orquestração multiagente salva no histórico.")
+    else:
+        st.info("Orquestração multiagente exibida sem salvar no histórico.")
 
 
 def _render_document_comparison(report: DocumentComparisonReport) -> None:
@@ -1096,6 +963,68 @@ def _render_historical_pattern_report(report: HistoricalPatternReport) -> None:
             st.write(source.content)
 
 
+def _render_multi_agent_report(report: MultiAgentReport) -> None:
+    st.markdown("**Síntese executiva**")
+    st.write(report.executive_summary)
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Agentes executados", len(report.agent_outputs))
+    metric_cols[1].metric(
+        "Achados gerados",
+        sum(len(output.findings) for output in report.agent_outputs),
+    )
+    metric_cols[2].metric("Registros históricos", report.historical_record_count)
+
+    st.markdown("**Consensos**")
+    for item in report.consensus or ["A confirmar"]:
+        st.write(f"- {item}")
+
+    st.markdown("**Conflitos e lacunas**")
+    for item in report.conflicts or ["A confirmar"]:
+        st.write(f"- {item}")
+
+    st.markdown("**Recomendações consolidadas**")
+    for item in report.recommendations or ["A confirmar"]:
+        st.write(f"- {item}")
+
+    st.markdown("**Parecer dos agentes**")
+    for output in report.agent_outputs:
+        with st.container(border=True):
+            st.markdown(f"**{output.agent_name}**")
+            st.caption(f"Confiança: {output.confidence} | Missão: {output.mission}")
+            st.write(output.summary)
+            for index, finding in enumerate(output.findings, start=1):
+                st.markdown(f"**{index}. {finding.title}**")
+                st.caption(f"{finding.category} | Severidade: {finding.severity}")
+                st.markdown(f"**Evidência:** {finding.evidence}")
+                st.markdown(f"**Recomendação:** {finding.recommendation}")
+                st.caption(f"Fontes: {', '.join(finding.source_refs) or 'Fonte não indicada'}")
+
+    export_cols = st.columns(3)
+    export_cols[0].download_button(
+        "Baixar Excel",
+        data=multi_agent_report_to_xlsx(report),
+        file_name="orquestracao_multiagente_synapse.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    export_cols[1].download_button(
+        "Baixar CSV",
+        data=multi_agent_report_to_csv(report),
+        file_name="orquestracao_multiagente_synapse.csv",
+        mime="text/csv; charset=utf-8",
+    )
+    export_cols[2].download_button(
+        "Baixar Markdown",
+        data=multi_agent_report_to_markdown(report),
+        file_name="orquestracao_multiagente_synapse.md",
+        mime="text/markdown",
+    )
+    with st.expander("Fontes usadas pelos agentes"):
+        for index, source in enumerate(report.sources, start=1):
+            st.markdown(f"**Fonte {index}: {source.filename}**")
+            st.caption(f"Trecho {source.chunk_index} | similaridade {source.similarity:.3f}")
+            st.write(source.content)
+
+
 def _render_action_plan(action_plan: ActionPlan) -> None:
     st.markdown("**Plano estruturado**")
     for index, item in enumerate(action_plan.items, start=1):
@@ -1160,6 +1089,8 @@ def _render_analysis_history(supabase_client: object, user_id: str) -> None:
                 _render_saved_preventive_alerts(metadata)
             elif _is_saved_historical_pattern_report(metadata):
                 _render_saved_historical_patterns(metadata)
+            elif _is_saved_multi_agent_report(metadata):
+                _render_saved_multi_agent_outputs(metadata)
             elif _is_saved_sentiment_report(metadata):
                 _render_saved_sentiment_signals(metadata)
             elif _is_saved_intelligence_snapshot(metadata):
@@ -1211,8 +1142,59 @@ def _is_saved_historical_pattern_report(metadata: object) -> bool:
     )
 
 
+def _is_saved_multi_agent_report(metadata: object) -> bool:
+    return isinstance(metadata, dict) and metadata.get("artifact_type") == "multi_agent_report"
+
+
 def _is_saved_sentiment_report(metadata: object) -> bool:
     return isinstance(metadata, dict) and metadata.get("artifact_type") == "sentiment_report"
+
+
+def _render_saved_multi_agent_outputs(metadata: object) -> None:
+    if not isinstance(metadata, dict):
+        return
+    raw_outputs = metadata.get("agent_outputs")
+    if not isinstance(raw_outputs, list) or not raw_outputs:
+        return
+    outputs = [output for output in raw_outputs if isinstance(output, dict)]
+    if outputs:
+        st.markdown("**Orquestração multiagente**")
+        st.caption(
+            f"Agentes: {metadata.get('agent_count', len(outputs))} | "
+            f"Achados: {metadata.get('finding_count', 0)} | "
+            f"Registros históricos: {metadata.get('historical_record_count', 0)}"
+        )
+        if isinstance(metadata.get("consensus"), list):
+            st.markdown("**Consensos**")
+            for item in _as_text_list(metadata.get("consensus")):
+                st.write(f"- {item}")
+        if isinstance(metadata.get("conflicts"), list):
+            st.markdown("**Conflitos e lacunas**")
+            for item in _as_text_list(metadata.get("conflicts")):
+                st.write(f"- {item}")
+        for output in outputs:
+            with st.container(border=True):
+                st.markdown(f"**{output.get('agent_name', '')}**")
+                st.caption(
+                    f"Confiança: {output.get('confidence', '')} | "
+                    f"Missão: {output.get('mission', '')}"
+                )
+                st.write(output.get("summary", ""))
+                raw_findings = output.get("findings")
+                if not isinstance(raw_findings, list):
+                    continue
+                for index, finding in enumerate(raw_findings, start=1):
+                    if not isinstance(finding, dict):
+                        continue
+                    st.markdown(f"**{index}. {finding.get('title', '')}**")
+                    st.caption(
+                        f"{finding.get('category', '')} | "
+                        f"Severidade: {finding.get('severity', '')}"
+                    )
+                    st.markdown(f"**Evidência:** {finding.get('evidence', '')}")
+                    st.markdown(f"**Recomendação:** {finding.get('recommendation', '')}")
+                    source_refs = ", ".join(_as_text_list(finding.get("source_refs")))
+                    st.caption(f"Fontes: {source_refs or 'Fonte não indicada'}")
 
 
 def _render_saved_historical_patterns(metadata: object) -> None:

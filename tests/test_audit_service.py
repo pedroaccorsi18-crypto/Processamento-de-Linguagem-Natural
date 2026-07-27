@@ -177,6 +177,30 @@ def test_build_audit_records_labels_historical_pattern_report() -> None:
     assert "Risco recorrente" in record.limitations[0]
 
 
+def test_build_audit_records_labels_multi_agent_report() -> None:
+    analysis = _analysis()
+    analysis["metadata"] = {
+        "artifact_type": "multi_agent_report",
+        "agent_outputs": [
+            {
+                "agent_name": "Agente de Governança",
+                "findings": [
+                    {
+                        "title": "Evidência insuficiente",
+                        "evidence": "A confirmar",
+                        "recommendation": "Validar fonte original.",
+                    }
+                ],
+            }
+        ],
+    }
+
+    record = build_audit_records([analysis], {})[0]
+
+    assert record.artifact_type == "Orquestração multiagente"
+    assert "Agente de Governança" in record.limitations[0]
+
+
 def test_audit_records_to_markdown_includes_evidence_package() -> None:
     records = build_audit_records(
         [_analysis()],

@@ -24,12 +24,22 @@ class OpenAISettings:
     api_key: str = field(repr=False)
     embedding_model: str = "text-embedding-3-small"
     generation_model: str = "gpt-5-mini"
+    transcription_model: str = "gpt-4o-mini-transcribe"
+
+
+@dataclass(frozen=True)
+class GoogleDriveSettings:
+    api_key: str = field(default="", repr=False)
+    client_id: str = field(default="", repr=False)
+    client_secret: str = field(default="", repr=False)
+    redirect_uri: str = "http://localhost:8501"
 
 
 @dataclass(frozen=True)
 class AppConfig:
     supabase: SupabaseSettings
     openai: OpenAISettings
+    google_drive: GoogleDriveSettings
 
 
 def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
@@ -48,6 +58,23 @@ def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
                 "text-embedding-3-small",
             ),
             generation_model=_optional(source, "openai", "generation_model", "gpt-5-mini"),
+            transcription_model=_optional(
+                source,
+                "openai",
+                "transcription_model",
+                "gpt-4o-mini-transcribe",
+            ),
+        ),
+        google_drive=GoogleDriveSettings(
+            api_key=_optional(source, "google_drive", "api_key", ""),
+            client_id=_optional(source, "google_drive", "client_id", ""),
+            client_secret=_optional(source, "google_drive", "client_secret", ""),
+            redirect_uri=_optional(
+                source,
+                "google_drive",
+                "redirect_uri",
+                "http://localhost:8501",
+            ),
         ),
     )
 

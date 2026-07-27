@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from synapse_ai.services.agent_service import AgentFinding, AgentOutput, MultiAgentReport
 from synapse_ai.services.alert_service import PreventiveAlert, PreventiveAlertReport
 from synapse_ai.services.analysis_repository import (
     AnalysisPersistenceError,
@@ -14,6 +15,7 @@ from synapse_ai.services.analysis_repository import (
     save_document_comparison_result,
     save_historical_pattern_report_result,
     save_intelligence_snapshot_result,
+    save_multi_agent_report_result,
     save_preventive_alert_report_result,
     save_sentiment_report_result,
 )
@@ -279,6 +281,48 @@ def test_save_historical_pattern_report_result_persists_structured_metadata() ->
     assert record["metadata"]["historical_record_count"] == 2
     assert record["metadata"]["patterns"][0]["title"] == "Aprovação financeira recorrente"
     assert "Padrões históricos" in record["answer"]
+
+
+def test_save_multi_agent_report_result_persists_structured_metadata() -> None:
+    query = FakeQuery()
+    client = FakeClient(query)
+    report = MultiAgentReport(
+        executive_summary="Há consenso multiagente sobre risco financeiro.",
+        consensus=["Risco financeiro recorrente."],
+        conflicts=["Evidência de aprovação ainda insuficiente."],
+        recommendations=["Priorizar validação financeira."],
+        historical_record_count=2,
+        agent_outputs=[
+            AgentOutput(
+                agent_id="risk_agent",
+                agent_name="Agente de Riscos",
+                mission="Identificar riscos.",
+                summary="Há risco de atraso.",
+                confidence="Alta",
+                findings=[
+                    AgentFinding(
+                        category="Risco",
+                        title="Aprovação pendente",
+                        severity="Alta",
+                        evidence="Orçamento depende de aprovação.",
+                        recommendation="Escalar validação.",
+                        source_refs=["Fonte 1"],
+                    )
+                ],
+            )
+        ],
+        sources=[SourceSnippet("doc-1", "ata.txt", 0, "Trecho usado.", 0.9)],
+    )
+
+    record = save_multi_agent_report_result(client, "user-1", report, "gpt-5-mini")
+
+    assert record["user_id"] == "user-1"
+    assert record["document_id"] == "doc-1"
+    assert record["metadata"]["artifact_type"] == "multi_agent_report"
+    assert record["metadata"]["agent_count"] == 1
+    assert record["metadata"]["finding_count"] == 1
+    assert record["metadata"]["agent_outputs"][0]["agent_name"] == "Agente de Riscos"
+    assert "Orquestração multiagente" in record["answer"]
 
 
 def test_save_analysis_result_wraps_errors() -> None:

@@ -381,6 +381,8 @@ def _artifact_type_label(analysis: dict[str, object]) -> str:
         return "Alertas preventivos"
     if isinstance(metadata, dict) and metadata.get("artifact_type") == "historical_pattern_report":
         return "Padrões históricos"
+    if isinstance(metadata, dict) and metadata.get("artifact_type") == "multi_agent_report":
+        return "Orquestração multiagente"
     if isinstance(metadata, dict) and metadata.get("artifact_type") == "intelligence_snapshot":
         return "Inteligência organizacional"
     if isinstance(metadata, dict) and metadata.get("artifact_type") == "sentiment_report":
@@ -463,6 +465,11 @@ def _extract_limitations(analysis: dict[str, object]) -> list[str]:
                     limitations.append(
                         f"{title}: recorrência, evidência histórica ou recomendação a confirmar."
                     )
+        raw_outputs = metadata.get("agent_outputs")
+        if isinstance(raw_outputs, list):
+            for output in raw_outputs:
+                if isinstance(output, dict):
+                    limitations.extend(_agent_output_limitations(output))
     return sorted(set(limitations))
 
 
@@ -513,6 +520,28 @@ def _pattern_requires_confirmation(pattern: dict[str, object]) -> bool:
         or _is_confirmation_value(pattern.get("historical_evidence"))
         or _is_confirmation_value(pattern.get("recommendation"))
     )
+
+
+def _agent_output_limitations(output: dict[str, object]) -> list[str]:
+    limitations = []
+    raw_findings = output.get("findings")
+    if not isinstance(raw_findings, list):
+        return limitations
+    agent_name = str(output.get("agent_name") or "Agente")
+    for finding in raw_findings:
+        if not isinstance(finding, dict):
+            continue
+        if (
+            _is_confirmation_value(finding.get("evidence"))
+            or _is_confirmation_value(finding.get("recommendation"))
+        ):
+            title = (
+                finding.get("title")
+                if isinstance(finding.get("title"), str)
+                else "Achado"
+            )
+            limitations.append(f"{agent_name} - {title}: evidência ou recomendação a confirmar.")
+    return limitations
 
 
 def _is_confirmation_value(value: object) -> bool:

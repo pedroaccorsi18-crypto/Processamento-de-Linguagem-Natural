@@ -107,6 +107,46 @@ def render_copilot(config: AppConfig) -> None:
     st.rerun()
 
 
+def render_copilot_context_panel(config: AppConfig, selected_page: str) -> None:
+    context = _page_context(selected_page)
+    with st.container(border=True):
+        st.caption("Copiloto contextual")
+        header_col, action_col = st.columns([0.72, 0.28])
+        with header_col:
+            st.markdown(f"**Assistente ativo em {context['label']}**")
+            st.caption(context["description"])
+        with action_col:
+            if st.button("Abrir central", use_container_width=True, key="context_open_copilot"):
+                st.session_state["pending_private_page"] = "copilot"
+                st.rerun()
+
+        latest_answer = _latest_assistant_message()
+        if latest_answer:
+            with st.expander("Última orientação do Copiloto", expanded=True):
+                st.markdown(latest_answer)
+        else:
+            st.info(context["empty_state"])
+
+        _render_contextual_quick_actions(
+            config,
+            selected_page,
+            prefix="context",
+            layout="columns",
+        )
+
+        with st.form(f"context_copilot_form_{selected_page}", clear_on_submit=True):
+            prompt = st.text_input(
+                "Pergunte ao Copiloto sem sair desta tela",
+                placeholder=context["placeholder"],
+            )
+            submitted = st.form_submit_button("Perguntar ao Copiloto", type="primary")
+        if submitted and prompt.strip():
+            _handle_copilot_prompt(config, prompt.strip())
+            st.rerun()
+
+        _render_pending_copilot_action(prefix="context")
+
+
 def render_copilot_sidebar(config: AppConfig, selected_page: str) -> None:
     st.sidebar.divider()
     with st.sidebar.expander("Copiloto contextual", expanded=False):
@@ -114,14 +154,12 @@ def render_copilot_sidebar(config: AppConfig, selected_page: str) -> None:
             "Pergunte sem sair da tela atual. O Copiloto usa o contexto da área aberta "
             "para sugerir o próximo passo."
         )
-        _render_contextual_quick_actions(config, selected_page)
+        _render_contextual_quick_actions(config, selected_page, prefix="sidebar")
 
-        recent_messages = _copilot_messages()[-4:]
-        if recent_messages:
-            st.caption("Conversa recente")
-            for message in recent_messages:
-                speaker = "Você" if message.role == "user" else "Copiloto"
-                st.markdown(f"**{speaker}:** {_compact_text(message.content, 180)}")
+        latest_answer = _latest_assistant_message()
+        if latest_answer:
+            with st.expander("Resposta mais recente", expanded=False):
+                st.markdown(latest_answer)
 
         with st.form("sidebar_copilot_form", clear_on_submit=True):
             prompt = st.text_area(
@@ -160,7 +198,13 @@ def _render_quick_actions(config: AppConfig) -> None:
                 st.rerun()
 
 
-def _render_contextual_quick_actions(config: AppConfig, selected_page: str) -> None:
+def _render_contextual_quick_actions(
+    config: AppConfig,
+    selected_page: str,
+    *,
+    prefix: str,
+    layout: Literal["stack", "columns"] = "stack",
+) -> None:
     actions_by_page = {
         "dashboard": (
             ("Ler KPIs", "Estou no Dashboard. Como devo interpretar os principais indicadores?"),
@@ -191,14 +235,47 @@ def _render_contextual_quick_actions(config: AppConfig, selected_page: str) -> N
         ),
     }
     actions = actions_by_page.get(selected_page, actions_by_page["copilot"])
+    if layout == "columns":
+        columns = st.columns(len(actions))
+        for index, (label, synthetic_prompt) in enumerate(actions):
+            with columns[index]:
+                _render_contextual_quick_action(
+                    config,
+                    selected_page,
+                    index,
+                    label,
+                    synthetic_prompt,
+                    prefix=prefix,
+                )
+        return
+
     for index, (label, synthetic_prompt) in enumerate(actions):
-        if st.button(
+        _render_contextual_quick_action(
+            config,
+            selected_page,
+            index,
             label,
-            use_container_width=True,
-            key=f"sidebar_copilot_quick_{selected_page}_{index}",
-        ):
-            _handle_copilot_prompt(config, synthetic_prompt)
-            st.rerun()
+            synthetic_prompt,
+            prefix=prefix,
+        )
+
+
+def _render_contextual_quick_action(
+    config: AppConfig,
+    selected_page: str,
+    index: int,
+    label: str,
+    synthetic_prompt: str,
+    *,
+    prefix: str,
+) -> None:
+    if st.button(
+        label,
+        use_container_width=True,
+        key=f"{prefix}_copilot_quick_{selected_page}_{index}",
+    ):
+        _handle_copilot_prompt(config, synthetic_prompt)
+        st.rerun()
 
 
 def _handle_copilot_prompt(config: AppConfig, prompt: str) -> None:
@@ -537,11 +614,73 @@ def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
 
 
-def _compact_text(value: str, max_length: int) -> str:
-    clean_value = " ".join(value.split())
-    if len(clean_value) <= max_length:
-        return clean_value
-    return f"{clean_value[: max_length - 1].rstrip()}..."
+def _latest_assistant_message() -> str:
+    for message in reversed(_copilot_messages()):
+        if message.role == "assistant":
+            return message.content
+    return ""
+
+
+def _page_context(selected_page: str) -> dict[str, str]:
+    contexts = {
+        "dashboard": {
+            "label": "Dashboard",
+            "description": (
+                "Ajuda a interpretar KPIs, riscos consolidados e próximos passos executivos."
+            ),
+            "empty_state": (
+                "Pergunte como ler os indicadores ou peça uma recomendação de próximo passo."
+            ),
+            "placeholder": "Ex.: O que merece minha atenção primeiro neste painel?",
+        },
+        "upload": {
+            "label": "Base documental",
+            "description": (
+                "Ajuda a conferir upload, tipos de arquivo, duplicidade e preparação semântica."
+            ),
+            "empty_state": (
+                "Pergunte o que validar após enviar um arquivo ou quando preparar a base para IA."
+            ),
+            "placeholder": "Ex.: O que devo conferir depois de subir este documento?",
+        },
+        "analysis": {
+            "label": "Estúdio de IA",
+            "description": (
+                "Ajuda a escolher perguntas, escopo documental, planos de ação e agentes."
+            ),
+            "empty_state": (
+                "Peça ajuda para formular uma pergunta forte ou decidir qual análise executar."
+            ),
+            "placeholder": "Ex.: Qual pergunta eu devo fazer para extrair decisões e riscos?",
+        },
+        "intelligence": {
+            "label": "Insights",
+            "description": (
+                "Ajuda a priorizar alertas, riscos, padrões e achados salvos."
+            ),
+            "empty_state": (
+                "Pergunte como transformar alertas e evidências em decisão executiva."
+            ),
+            "placeholder": "Ex.: Como priorizo estes riscos para uma reunião executiva?",
+        },
+        "audit": {
+            "label": "Evidências",
+            "description": (
+                "Ajuda a preparar rastreabilidade, auditoria e pacotes para apresentação."
+            ),
+            "empty_state": (
+                "Pergunte o que exportar para provar as fontes e decisões do Synapse."
+            ),
+            "placeholder": "Ex.: Como monto um pacote de evidências convincente?",
+        },
+        "copilot": {
+            "label": "Copiloto",
+            "description": "Ajuda a navegar pelo Synapse e escolher o melhor fluxo.",
+            "empty_state": COPILOT_WELCOME_MESSAGE,
+            "placeholder": "Ex.: Qual roteiro devo seguir para usar a plataforma?",
+        },
+    }
+    return contexts.get(selected_page, contexts["copilot"])
 
 
 def _current_product_area() -> str:

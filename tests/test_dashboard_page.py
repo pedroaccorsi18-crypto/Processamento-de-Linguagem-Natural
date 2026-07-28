@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from synapse_ai.ui.dashboard_page import (
+    DashboardFilters,
     DashboardSummary,
+    _available_departments,
     _build_next_best_steps,
+    _filter_dashboard_analyses,
     build_dashboard_summary,
 )
 
@@ -176,3 +179,61 @@ def test_build_next_best_steps_prioritizes_readiness_and_risk() -> None:
     assert steps[0].startswith("Prepare 2 documento")
     assert steps[1].startswith("Revise 1 alerta")
     assert steps[2].startswith("Gere um plano de ação")
+
+
+def test_available_departments_uses_detected_data_instead_of_fixed_options() -> None:
+    analyses = [
+        {"metadata": {"department": "Financeiro"}},
+        {"answer": "O sistema de tecnologia precisa revisar o login."},
+    ]
+
+    departments = _available_departments(analyses)
+
+    assert departments == ["Financeiro", "Tecnologia"]
+
+
+def test_dashboard_filters_match_nested_multi_agent_findings() -> None:
+    analyses = [
+        {
+            "answer": "Risco de segurança no login.",
+            "metadata": {
+                "artifact_type": "multi_agent_report",
+                "agent_outputs": [
+                    {
+                        "agent_name": "Agente de Riscos",
+                        "findings": [{"severity": "Alta", "title": "Revisão técnica"}],
+                    }
+                ],
+            },
+        },
+        {
+            "answer": "Plano financeiro sem severidade alta.",
+            "metadata": {
+                "artifact_type": "action_plan",
+                "items": [{"priority": "Média", "task": "Validar orçamento"}],
+            },
+        },
+    ]
+
+    filtered = _filter_dashboard_analyses(
+        analyses,
+        DashboardFilters(departments=["Tecnologia", "Financeiro"], risk_level="Alta"),
+    )
+
+    assert filtered == [analyses[0]]
+
+
+def test_dashboard_filters_normalize_risk_level_synonyms() -> None:
+    analyses = [
+        {
+            "answer": "Clima de equipe em atenção.",
+            "metadata": {"artifact_type": "sentiment_report", "risk_level": "Alto"},
+        }
+    ]
+
+    filtered = _filter_dashboard_analyses(
+        analyses,
+        DashboardFilters(departments=["RH"], risk_level="Alta"),
+    )
+
+    assert filtered == analyses

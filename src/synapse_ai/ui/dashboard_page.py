@@ -181,42 +181,55 @@ def build_dashboard_summary(
 def _render_dashboard_filters(analyses: list[dict[str, object]]) -> DashboardFilters:
     with st.expander("Filtros executivos", expanded=False):
         st.caption(
-            "Use os filtros para simular leituras por área e nível de risco sem alterar "
-            "a base documental nem os registros salvos."
+            "Use os filtros para recortar as análises salvas por área detectada e nível "
+            "de risco. A base documental e os registros originais permanecem intactos."
         )
         departments = _available_departments(analyses)
         filter_cols = st.columns(2)
-        selected_departments = filter_cols[0].multiselect(
-            "Departamento",
-            options=departments,
-            default=departments,
-            help="Segmenta a narrativa do painel por área organizacional.",
+        selected_department = filter_cols[0].selectbox(
+            "Área de leitura",
+            options=["Todas as áreas", *departments],
+            help=(
+                "Filtra as análises por área quando o Synapse identifica sinais textuais "
+                "ou metadados de departamento."
+            ),
         )
         risk_level = filter_cols[1].selectbox(
             "Nível de risco",
             options=["Todos", "Crítica", "Alta", "Média", "Baixa"],
             help="Filtra alertas e artefatos vinculados ao nível selecionado.",
         )
-    return DashboardFilters(
-        departments=selected_departments or departments,
-        risk_level=risk_level,
-    )
+        filters = DashboardFilters(
+            departments=departments
+            if selected_department == "Todas as áreas"
+            else [selected_department],
+            risk_level=risk_level,
+        )
+        filtered_count = len(_filter_dashboard_analyses(analyses, filters))
+        st.caption(
+            f"Recorte atual: {filtered_count} de {len(analyses)} análise(s) salva(s)."
+        )
+    return filters
 
 
 def _available_departments(analyses: list[dict[str, object]]) -> list[str]:
-    defaults = ["Financeiro", "RH", "Tecnologia", "Operações", "Jurídico", "Geral"]
-    discovered = {_department_for_analysis(analysis) for analysis in analyses}
-    return sorted(set(defaults) | discovered)
+    discovered = {
+        department
+        for analysis in analyses
+        if (department := _department_for_analysis(analysis))
+    }
+    return sorted(discovered) or ["Geral"]
 
 
 def _filter_dashboard_analyses(
     analyses: list[dict[str, object]],
     filters: DashboardFilters,
 ) -> list[dict[str, object]]:
+    selected_departments = set(filters.departments)
     filtered = [
         analysis
         for analysis in analyses
-        if _department_for_analysis(analysis) in set(filters.departments)
+        if _department_for_analysis(analysis) in selected_departments
     ]
     if filters.risk_level == "Todos":
         return filtered
@@ -260,20 +273,62 @@ def _analysis_has_risk_level(analysis: dict[str, object], risk_level: str) -> bo
     metadata = analysis.get("metadata")
     if not isinstance(metadata, dict):
         return False
-    severity_containers = (
-        metadata.get("alerts"),
-        metadata.get("patterns"),
-        metadata.get("items"),
-        metadata.get("issues"),
+
+    direct_values = (
+        metadata.get("severity"),
+        metadata.get("priority"),
+        metadata.get("risk_level"),
     )
-    for container in severity_containers:
+    if any(_normalize_filter_level(value) == risk_level for value in direct_values):
+        return True
+
+    for container in _severity_containers(metadata):
         if isinstance(container, list) and any(
             isinstance(item, dict)
-            and str(item.get("severity") or item.get("priority") or "") == risk_level
+            and _normalize_filter_level(
+                item.get("severity") or item.get("priority") or item.get("risk_level")
+            )
+            == risk_level
             for item in container
         ):
             return True
     return False
+
+
+def _severity_containers(metadata: dict[str, object]) -> tuple[object, ...]:
+    containers: list[object] = [
+        metadata.get("alerts"),
+        metadata.get("patterns"),
+        metadata.get("items"),
+        metadata.get("issues"),
+        metadata.get("findings"),
+        metadata.get("signals"),
+    ]
+    raw_outputs = metadata.get("agent_outputs")
+    if isinstance(raw_outputs, list):
+        for raw_output in raw_outputs:
+            if isinstance(raw_output, dict):
+                containers.append(raw_output.get("findings"))
+    return tuple(containers)
+
+
+def _normalize_filter_level(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    clean_value = value.strip().casefold()
+    level_map = {
+        "critica": "Crítica",
+        "crítica": "Crítica",
+        "alta": "Alta",
+        "alto": "Alta",
+        "média": "Média",
+        "media": "Média",
+        "médio": "Média",
+        "medio": "Média",
+        "baixa": "Baixa",
+        "baixo": "Baixa",
+    }
+    return level_map.get(clean_value, "")
 
 
 def _render_dashboard_overview(summary: DashboardSummary) -> None:

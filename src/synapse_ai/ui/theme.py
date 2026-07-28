@@ -264,10 +264,32 @@ def apply_synapse_theme() -> None:
         div[data-testid="stAlert"] {
             border-radius: var(--synapse-radius) !important;
             border: 1px solid transparent;
+            color: var(--synapse-ink) !important;
+            opacity: 1 !important;
+        }
+
+        div[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+        div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
+        div[data-testid="stAlert"] p,
+        div[data-testid="stAlert"] span,
+        div[data-testid="stAlert"] li,
+        div[data-testid="stAlert"] div {
+            color: var(--synapse-ink) !important;
+            opacity: 1 !important;
         }
 
         div[data-testid="stAlert"] p {
             line-height: 1.45;
+        }
+
+        div[data-testid="stAlert"] a {
+            color: var(--synapse-brand-dark) !important;
+            font-weight: 700;
+        }
+
+        div[data-testid="stAlert"] svg {
+            color: currentColor !important;
+            opacity: 1 !important;
         }
 
         hr {
@@ -313,6 +335,46 @@ def apply_synapse_theme() -> None:
 
             .synapse-public-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            [data-testid="stMain"] [data-testid="block-container"] {
+                padding-top: 2rem;
+                padding-bottom: 5rem;
+            }
+
+            div[data-testid="stAlert"] {
+                padding: 0.85rem 0.95rem !important;
+                color: var(--synapse-ink) !important;
+            }
+
+            div[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+            div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
+            div[data-testid="stAlert"] p,
+            div[data-testid="stAlert"] span,
+            div[data-testid="stAlert"] li,
+            div[data-testid="stAlert"] div {
+                color: var(--synapse-ink) !important;
+                opacity: 1 !important;
+            }
+
+            div[data-testid="stAlert"] p {
+                margin-bottom: 0 !important;
+                font-size: 0.95rem;
+                line-height: 1.45;
+            }
+
+            .synapse-page-header {
+                margin-bottom: 1.15rem;
+            }
+
+            .synapse-page-header h1 {
+                font-size: 2rem;
+            }
+
+            .synapse-callout {
+                padding: 1rem;
             }
         }
         </style>

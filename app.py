@@ -6,6 +6,7 @@ from synapse_ai.auth.session import get_current_session_user, initialize_session
 from synapse_ai.config import MissingConfigError, load_config
 from synapse_ai.ui.analysis_page import render_analysis_page
 from synapse_ai.ui.audit_page import render_audit_page
+from synapse_ai.ui.copilot_page import render_copilot
 from synapse_ai.ui.dashboard_page import render_dashboard_page
 from synapse_ai.ui.home_page import render_home_page
 from synapse_ai.ui.intelligence_page import render_intelligence_page
@@ -57,6 +58,8 @@ def main() -> None:
             render_intelligence_page(config)
         elif selected_page == "audit":
             render_audit_page(config)
+        elif selected_page == "copilot":
+            render_copilot(config)
         return
 
     if has_google_drive_oauth_return():

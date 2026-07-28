@@ -28,11 +28,11 @@ def private_navigation() -> str:
             st.rerun()
 
     pending_page = st.session_state.pop("pending_private_page", None)
-    if pending_page in {"dashboard", "upload", "analysis", "intelligence", "audit"}:
+    if pending_page in {"dashboard", "upload", "analysis", "intelligence", "audit", "copilot"}:
         st.session_state["private_page"] = pending_page
     return st.sidebar.radio(
         "Área autenticada",
-        options=("dashboard", "upload", "analysis", "intelligence", "audit"),
+        options=("dashboard", "upload", "analysis", "intelligence", "audit", "copilot"),
         format_func=_private_label,
         key="private_page",
     )
@@ -54,5 +54,6 @@ def _private_label(page: str) -> str:
         "analysis": "Estúdio de IA",
         "intelligence": "Insights",
         "audit": "Evidências",
+        "copilot": "Copiloto",
     }
     return labels[page]

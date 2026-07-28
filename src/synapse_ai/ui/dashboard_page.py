@@ -128,9 +128,12 @@ def render_dashboard_page(config: AppConfig) -> None:
         _render_document_health(documents, chunk_counts)
     _render_preventive_alerts(filtered_analyses)
     _render_action_intelligence(filtered_analyses)
-    with st.expander("Inventário, padrões históricos e multiagente", expanded=False):
-        _render_intelligence_inventory(summary)
+    st.divider()
+    _render_intelligence_inventory(summary)
+    secondary_left, secondary_right = st.columns(2)
+    with secondary_left:
         _render_historical_patterns(filtered_analyses)
+    with secondary_right:
         _render_multi_agent_findings(filtered_analyses)
     _render_executive_report_downloads(
         client,

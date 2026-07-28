@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import streamlit as st
 
 from synapse_ai.auth.session import (
@@ -72,6 +74,8 @@ from synapse_ai.ui.theme import (
     render_page_header,
     render_status_badge,
 )
+
+UPLOAD_PARSE_CACHE_KEY = "synapse_upload_parse_cache"
 
 
 def render_upload_page(config: AppConfig) -> None:
@@ -153,7 +157,10 @@ def render_upload_page(config: AppConfig) -> None:
             )
             try:
                 with st.spinner("Extraindo texto e metadados do documento..."):
-                    parsed_document = _parse_document_for_upload(config, uploaded_document)
+                    parsed_document = _parse_document_for_upload_cached(
+                        config,
+                        uploaded_document,
+                    )
             except (AudioTranscriptionError, DocumentProcessingError, RuntimeError) as exc:
                 st.error(str(exc))
                 return
@@ -346,6 +353,40 @@ def _parse_document_for_upload(
         uploaded_document,
         transcription_text,
         config.openai.transcription_model,
+    )
+
+
+def _parse_document_for_upload_cached(
+    config: AppConfig,
+    uploaded_document: UploadedDocument,
+) -> ParsedDocument:
+    cache_key = _uploaded_document_cache_key(config, uploaded_document)
+    cached_entry = st.session_state.get(UPLOAD_PARSE_CACHE_KEY)
+    if isinstance(cached_entry, dict) and cached_entry.get("key") == cache_key:
+        parsed_document = cached_entry.get("parsed_document")
+        if isinstance(parsed_document, ParsedDocument):
+            return parsed_document
+
+    parsed_document = _parse_document_for_upload(config, uploaded_document)
+    st.session_state[UPLOAD_PARSE_CACHE_KEY] = {
+        "key": cache_key,
+        "parsed_document": parsed_document,
+    }
+    return parsed_document
+
+
+def _uploaded_document_cache_key(
+    config: AppConfig,
+    uploaded_document: UploadedDocument,
+) -> str:
+    checksum = hashlib.sha256(uploaded_document.content).hexdigest()
+    return "|".join(
+        (
+            uploaded_document.filename,
+            uploaded_document.content_type,
+            checksum,
+            config.openai.transcription_model,
+        )
     )
 
 

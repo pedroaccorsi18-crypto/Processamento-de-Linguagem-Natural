@@ -54,7 +54,6 @@ def main() -> None:
         selected_page = private_navigation()
         if selected_page != "copilot":
             render_copilot_sidebar(config, selected_page)
-            render_copilot_context_panel(config, selected_page)
         if selected_page == "dashboard":
             render_dashboard_page(config)
         elif selected_page == "upload":
@@ -67,6 +66,8 @@ def main() -> None:
             render_audit_page(config)
         elif selected_page == "copilot":
             render_copilot(config)
+        if selected_page != "copilot":
+            render_copilot_context_panel(config, selected_page)
         return
 
     if has_google_drive_oauth_return():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from synapse_ai.ui.copilot_page import (
     _build_document_excerpt_answer,
+    _compact_markdown,
     _is_document_excerpt_request,
     resolve_openai_api_key,
     route_copilot_intent,
@@ -106,3 +107,10 @@ def test_resolve_openai_api_key_supports_existing_openai_section() -> None:
     api_key = resolve_openai_api_key({"openai": {"api_key": "sk-section"}})
 
     assert api_key == "sk-section"
+
+
+def test_compact_markdown_trims_long_contextual_answers() -> None:
+    answer = _compact_markdown("palavra " * 120, limit=80)
+
+    assert len(answer) <= 83
+    assert answer.endswith("...")

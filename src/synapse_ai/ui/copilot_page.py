@@ -17,6 +17,7 @@ from synapse_ai.clients.supabase_client import create_authenticated_supabase_con
 from synapse_ai.config import AppConfig
 from synapse_ai.ui.cache import (
     cached_recent_analyses,
+    cached_user_documents,
     cached_user_documents_for_processing,
 )
 from synapse_ai.ui.state import current_tenant_id
@@ -115,7 +116,8 @@ def render_copilot(config: AppConfig) -> None:
     if not prompt:
         return
 
-    _handle_copilot_prompt(config, prompt)
+    with st.spinner("Copiloto analisando o contexto..."):
+        _handle_copilot_prompt(config, prompt)
     st.rerun()
 
 
@@ -134,7 +136,9 @@ def render_copilot_context_panel(config: AppConfig, selected_page: str) -> None:
 
         latest_answer = _latest_assistant_message()
         if latest_answer:
-            with st.expander("Última orientação do Copiloto", expanded=True):
+            st.caption("Última orientação")
+            st.markdown(_compact_markdown(latest_answer, limit=420))
+            with st.expander("Ver resposta completa", expanded=False):
                 st.markdown(latest_answer)
         else:
             st.info(context["empty_state"])
@@ -153,7 +157,8 @@ def render_copilot_context_panel(config: AppConfig, selected_page: str) -> None:
             )
             submitted = st.form_submit_button("Perguntar ao Copiloto", type="primary")
         if submitted and prompt.strip():
-            _handle_copilot_prompt(config, prompt.strip())
+            with st.spinner("Copiloto analisando o contexto..."):
+                _handle_copilot_prompt(config, prompt.strip())
             st.rerun()
 
         _render_pending_copilot_action(prefix="context")
@@ -182,7 +187,8 @@ def render_copilot_sidebar(config: AppConfig, selected_page: str) -> None:
             )
             submitted = st.form_submit_button("Enviar ao Copiloto", type="primary")
         if submitted and prompt.strip():
-            _handle_copilot_prompt(config, prompt.strip())
+            with st.spinner("Copiloto analisando o contexto..."):
+                _handle_copilot_prompt(config, prompt.strip())
             st.rerun()
 
         _render_pending_copilot_action(prefix="sidebar")
@@ -585,9 +591,9 @@ def _load_user_processable_documents(config: AppConfig) -> list[dict[str, object
 
 
 def _load_copilot_context_snapshot(config: AppConfig) -> str:
-    documents = _load_user_processable_documents(config)
     user = get_current_session_user()
     access_token = get_access_token()
+    documents: list[dict[str, object]] = []
     analyses: list[dict[str, object]] = []
     if user is not None and access_token is not None:
         try:
@@ -598,8 +604,10 @@ def _load_copilot_context_snapshot(config: AppConfig) -> str:
             )
             update_auth_tokens(connection.access_token, connection.refresh_token)
             tenant_id = current_tenant_id(user)
+            documents = cached_user_documents(connection.client, tenant_id, user.id, 8)
             analyses = cached_recent_analyses(connection.client, tenant_id, user.id, 8)
         except Exception:  # noqa: BLE001
+            documents = []
             analyses = []
     return _build_context_snapshot(documents, analyses)
 
@@ -782,6 +790,13 @@ def _trim_excerpt(text: str, limit: int = 520) -> str:
     clean_text = " ".join(text.split())
     if len(clean_text) <= limit:
         return clean_text
+    return f"{clean_text[: limit - 1].rstrip()}..."
+
+
+def _compact_markdown(text: str, *, limit: int) -> str:
+    clean_text = " ".join(text.split())
+    if len(clean_text) <= limit:
+        return text
     return f"{clean_text[: limit - 1].rstrip()}..."
 
 

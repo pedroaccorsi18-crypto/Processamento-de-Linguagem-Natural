@@ -340,7 +340,7 @@ def _render_dashboard_overview(summary: DashboardSummary) -> None:
 
 
 def _render_dashboard_charts(analyses: list[dict[str, object]]) -> None:
-    st.subheader("Narrativa de riscos")
+    st.subheader("Mapa de riscos")
     alerts = _extract_preventive_alerts(
         [analysis for analysis in analyses if _is_preventive_alert_report(analysis)]
     )
@@ -353,10 +353,10 @@ def _render_dashboard_charts(analyses: list[dict[str, object]]) -> None:
         )
         return
 
-    chart_cols = st.columns((0.9, 1.1))
-    with chart_cols[0]:
+    severity_tab, timeline_tab = st.tabs(["Severidade", "Evolução no tempo"])
+    with severity_tab:
         _render_alert_severity_donut(alerts)
-    with chart_cols[1]:
+    with timeline_tab:
         _render_risk_evolution_chart(analyses)
 
 
@@ -382,7 +382,7 @@ def _render_alert_severity_donut(alerts: list[dict[str, object]]) -> None:
             ),
             tooltip=["Severidade:N", "Alertas:Q"],
         )
-        .properties(height=260)
+        .properties(height=360)
     )
     st.altair_chart(chart, use_container_width=True)
 
@@ -399,7 +399,7 @@ def _render_risk_evolution_chart(analyses: list[dict[str, object]]) -> None:
             color=alt.Color("Nível:N", legend=alt.Legend(orient="bottom")),
             tooltip=["Período:N", "Nível:N", "Riscos:Q"],
         )
-        .properties(height=260)
+        .properties(height=360)
     )
     st.altair_chart(chart, use_container_width=True)
 
@@ -588,7 +588,7 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
         }
         for item in action_items[:10]
     ]
-    with st.expander("Ver tarefas priorizadas", expanded=True):
+    with st.expander("Ver tarefas priorizadas", expanded=False):
         st.dataframe(rows, use_container_width=True, hide_index=True)
 
     high_priority = [item for item in action_items if item.get("priority") == "Alta"]
@@ -651,7 +651,7 @@ def _render_preventive_alerts(analyses: list[dict[str, object]]) -> None:
             key=lambda item: severity_order.get(str(item.get("severity", "")), 4),
         )[:10]
     ]
-    with st.expander("Ver alertas detectados", expanded=True):
+    with st.expander("Ver alertas detectados", expanded=False):
         st.dataframe(rows, use_container_width=True, hide_index=True)
 
     critical_alerts = [alert for alert in alerts if alert.get("severity") == "Crítica"]

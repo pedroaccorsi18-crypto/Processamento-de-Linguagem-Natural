@@ -16,6 +16,7 @@ from synapse_ai.ui.cache import (
     cached_user_documents,
 )
 from synapse_ai.ui.dashboard_page import (
+    DashboardSummary,
     _document_ids,
     _filter_dashboard_analyses,
     _render_action_intelligence,
@@ -29,14 +30,14 @@ from synapse_ai.ui.dashboard_page import (
     build_dashboard_summary,
 )
 from synapse_ai.ui.state import current_tenant_id
-from synapse_ai.ui.theme import render_callout, render_page_header
+from synapse_ai.ui.theme import render_callout, render_kpi_card, render_page_header
 
 
 def render_intelligence_page(config: AppConfig) -> None:
     render_page_header(
         "Insights organizacionais",
-        "Explore alertas, padrões, planos de ação e achados especializados gerados a partir "
-        "da base documental.",
+        "Investigue riscos, planos, padrões e achados especializados sem misturar operação "
+        "com análise executiva.",
         "Insights consolidados",
     )
 
@@ -77,20 +78,59 @@ def render_intelligence_page(config: AppConfig) -> None:
     summary = build_dashboard_summary(documents, chunk_counts, filtered_analyses)
 
     render_callout(
-        "Como usar esta área",
-        "Use esta página para investigar o que já foi descoberto. Para gerar novas respostas, "
-        "planos ou agentes, vá para o Estúdio de IA.",
+        "Leitura guiada",
+        "Comece pelo mapa de riscos. Depois abra a aba específica para investigar alertas, "
+        "planos de ação, padrões históricos ou agentes especializados.",
     )
+
+    _render_insights_summary(summary)
     _render_dashboard_charts(filtered_analyses)
-    _render_preventive_alerts(filtered_analyses)
-    _render_action_intelligence(filtered_analyses)
-    _render_intelligence_inventory(summary)
 
-    detail_cols = st.columns(2)
-    with detail_cols[0]:
+    risk_tab, plan_tab, pattern_tab, agent_tab, inventory_tab = st.tabs(
+        ["Riscos", "Planos de ação", "Padrões", "Agentes", "Inventário"]
+    )
+    with risk_tab:
+        _render_preventive_alerts(filtered_analyses)
+    with plan_tab:
+        _render_action_intelligence(filtered_analyses)
+    with pattern_tab:
         _render_historical_patterns(filtered_analyses)
-    with detail_cols[1]:
+    with agent_tab:
         _render_multi_agent_findings(filtered_analyses)
+    with inventory_tab:
+        _render_intelligence_inventory(summary)
 
-    with st.expander("Capacidades disponíveis", expanded=False):
-        _render_available_capabilities()
+        with st.expander("Capacidades disponíveis", expanded=False):
+            _render_available_capabilities()
+
+
+def _render_insights_summary(summary: DashboardSummary) -> None:
+    summary_cols = st.columns(4)
+    with summary_cols[0]:
+        render_kpi_card(
+            "Alertas",
+            summary.preventive_alerts,
+            "Sinais preventivos detectados.",
+            tone="red" if summary.critical_preventive_alerts else "amber",
+        )
+    with summary_cols[1]:
+        render_kpi_card(
+            "Críticos",
+            summary.critical_preventive_alerts,
+            "Exigem validação imediata.",
+            tone="red" if summary.critical_preventive_alerts else "green",
+        )
+    with summary_cols[2]:
+        render_kpi_card(
+            "Planos",
+            summary.action_plans,
+            "Planos de ação salvos.",
+            tone="blue",
+        )
+    with summary_cols[3]:
+        render_kpi_card(
+            "Achados",
+            summary.multi_agent_findings + summary.historical_patterns,
+            "Padrões e achados multiagente.",
+            tone="green" if summary.multi_agent_findings or summary.historical_patterns else "blue",
+        )

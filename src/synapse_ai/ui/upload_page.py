@@ -149,7 +149,11 @@ def render_upload_page(config: AppConfig) -> None:
                 disabled=True,
             )
 
-        duplicate_document = _find_duplicate_document(parsed_document.metadata, documents)
+        duplicate_document = _find_duplicate_document(
+            parsed_document.metadata,
+            documents,
+            user.id,
+        )
         allow_duplicate_save = True
         button_label = "Salvar documento"
         if duplicate_document is not None:
@@ -404,7 +408,10 @@ def _import_google_drive_files(
                 content=downloaded_file.content,
             )
             parsed_document = _parse_document_for_upload(config, uploaded_document)
-            if _find_duplicate_document(parsed_document.metadata, documents) is not None:
+            if (
+                _find_duplicate_document(parsed_document.metadata, documents, user_id)
+                is not None
+            ):
                 st.warning(f"{downloaded_file.filename} já existe na base e foi ignorado.")
                 continue
             saved_document = save_parsed_document(client, user_id, parsed_document)
@@ -586,12 +593,15 @@ def _document_ids(documents: list[dict[str, object]]) -> list[str]:
 def _find_duplicate_document(
     parsed_metadata: dict[str, object],
     documents: list[dict[str, object]],
+    current_user_id: str,
 ) -> dict[str, object] | None:
     checksum = parsed_metadata.get("checksum_sha256")
     if not isinstance(checksum, str) or not checksum:
         return None
 
     for document in documents:
+        if document.get("user_id") != current_user_id:
+            continue
         metadata = document.get("metadata")
         if not isinstance(metadata, dict):
             continue

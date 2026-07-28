@@ -19,6 +19,8 @@ class FakeQuery:
         self.response_data = response_data if response_data is not None else []
         self.fail = fail
         self.inserted_payload: dict[str, Any] | None = None
+        self.selected_columns = ""
+        self.filters: dict[str, str] = {}
 
     def insert(self, payload: dict[str, Any]) -> FakeQuery:
         self.inserted_payload = payload
@@ -28,10 +30,12 @@ class FakeQuery:
         self.inserted_payload = payload
         return self
 
-    def select(self, _columns: str) -> FakeQuery:
+    def select(self, columns: str) -> FakeQuery:
+        self.selected_columns = columns
         return self
 
-    def eq(self, _column: str, _value: str) -> FakeQuery:
+    def eq(self, column: str, value: str) -> FakeQuery:
+        self.filters[column] = value
         return self
 
     def order(self, _column: str, desc: bool = False) -> FakeQuery:
@@ -83,9 +87,12 @@ def test_save_parsed_document_wraps_errors() -> None:
 
 def test_list_user_documents_returns_response_data() -> None:
     documents = [{"id": "doc-1", "filename": "ata.txt"}]
-    client = FakeClient(FakeQuery(response_data=documents))
+    query = FakeQuery(response_data=documents)
+    client = FakeClient(query)
 
     assert list_user_documents(client, "user-1") == documents
+    assert "user_id" in query.selected_columns
+    assert query.filters["user_id"] == "user-1"
 
 
 def test_update_document_storage_location_updates_documents_table() -> None:

@@ -44,7 +44,7 @@ def list_user_documents(client: Any, user_id: str, limit: int = 20) -> list[dict
         response = (
             client.table("documents")
             .select(
-                "id, filename, content_type, size_bytes, status, text_char_count, "
+                "id, user_id, filename, content_type, size_bytes, status, text_char_count, "
                 "storage_bucket, storage_path, metadata, created_at"
             )
             .eq("user_id", user_id)
@@ -89,7 +89,10 @@ def list_user_documents_for_processing(
     try:
         response = (
             client.table("documents")
-            .select("id, filename, status, extracted_text, text_char_count, metadata, created_at")
+            .select(
+                "id, user_id, filename, status, extracted_text, text_char_count, "
+                "metadata, created_at"
+            )
             .eq("user_id", user_id)
             .not_.is_("extracted_text", "null")
             .order("created_at", desc=True)

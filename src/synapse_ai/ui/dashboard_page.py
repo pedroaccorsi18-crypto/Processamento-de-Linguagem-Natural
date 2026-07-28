@@ -802,13 +802,13 @@ def _render_executive_report_downloads(
         report = build_executive_report(documents, chunk_counts, analyses)
         download_cols = st.columns(2)
         download_cols[0].download_button(
-            "Baixar painel Markdown",
+            "Exportar painel Markdown",
             data=executive_report_to_markdown(report),
             file_name="painel_executivo_synapse.md",
             mime="text/markdown",
         )
         download_cols[1].download_button(
-            "Baixar painel PDF",
+            "Exportar painel PDF",
             data=executive_report_to_pdf(report),
             file_name="painel_executivo_synapse.pdf",
             mime="application/pdf",
@@ -857,13 +857,13 @@ def _generate_intelligent_report_downloads(
             st.write(f"- {item}")
     download_cols = st.columns(2)
     download_cols[0].download_button(
-        "Baixar relatório inteligente Markdown",
+        "Exportar relatório inteligente Markdown",
         data=intelligent_report_to_markdown(report),
         file_name="relatorio_executivo_inteligente_synapse.md",
         mime="text/markdown",
     )
     download_cols[1].download_button(
-        "Baixar relatório inteligente PDF",
+        "Exportar relatório inteligente PDF",
         data=intelligent_report_to_pdf(report),
         file_name="relatorio_executivo_inteligente_synapse.pdf",
         mime="application/pdf",

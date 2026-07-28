@@ -640,7 +640,7 @@ def _render_download_button(client: object, document: dict[str, object]) -> None
         return
 
     st.download_button(
-        "Baixar arquivo original",
+        "Baixar original",
         data=file_content,
         file_name=filename,
         mime=content_type,

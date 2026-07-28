@@ -78,20 +78,20 @@ def render_audit_page(config: AppConfig) -> None:
     _render_audit_summary(filtered_records)
     download_cols = st.columns(3)
     download_cols[0].download_button(
-        "Baixar relatório premium PDF",
+        "Exportar relatório premium PDF",
         data=audit_records_to_premium_pdf(filtered_records),
         file_name="relatorio_premium_auditoria_synapse.pdf",
         mime="application/pdf",
         type="primary",
     )
     download_cols[1].download_button(
-        "Baixar pacote PDF",
+        "Exportar pacote PDF",
         data=audit_records_to_pdf(filtered_records),
         file_name="pacote_de_evidencias_synapse.pdf",
         mime="application/pdf",
     )
     download_cols[2].download_button(
-        "Baixar pacote Markdown",
+        "Exportar pacote Markdown",
         data=audit_records_to_markdown(filtered_records),
         file_name="pacote_de_evidencias_synapse.md",
         mime="text/markdown",
@@ -152,7 +152,7 @@ def _render_audit_records(records: list[AuditRecord]) -> None:
                     st.write(f"- {limitation}")
             _render_sources(record)
             st.download_button(
-                "Baixar PDF deste registro",
+                "Exportar PDF deste registro",
                 data=audit_records_to_pdf([record]),
                 file_name=f"evidencias_{_safe_filename(record.title)}.pdf",
                 mime="application/pdf",

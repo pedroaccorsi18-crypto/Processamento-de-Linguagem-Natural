@@ -17,10 +17,17 @@ def render_login_page(config: AppConfig) -> None:
         "Acesso seguro",
     )
 
-    with st.form("login_form"):
-        email = st.text_input("E-mail")
-        password = st.text_input("Senha", type="password")
-        submitted = st.form_submit_button("Entrar")
+    _, center, _ = st.columns((0.2, 0.6, 0.2))
+    with center:
+        with st.form("login_form"):
+            email = st.text_input("E-mail", placeholder="voce@empresa.com")
+            password = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button(
+                "Entrar com segurança",
+                type="primary",
+                use_container_width=True,
+            )
+        st.caption("Seu acesso isola documentos, análises e evidências por conta.")
 
     if not submitted:
         st.caption("Ainda não tem conta? Use a página de cadastro no menu lateral.")

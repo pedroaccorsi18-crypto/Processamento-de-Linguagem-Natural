@@ -1105,19 +1105,19 @@ def _render_document_comparison(report: DocumentComparisonReport) -> None:
             st.caption(f"Fontes: {', '.join(issue.source_refs) or 'Fonte não indicada'}")
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=document_comparison_to_xlsx(report),
         file_name="comparacao_documental_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=document_comparison_to_csv(report),
         file_name="comparacao_documental_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=document_comparison_to_markdown(report),
         file_name="comparacao_documental_synapse.md",
         mime="text/markdown",
@@ -1147,19 +1147,19 @@ def _render_intelligence_snapshot(snapshot: IntelligenceSnapshot) -> None:
             st.caption(f"Fontes: {', '.join(finding.source_refs) or 'Fonte não indicada'}")
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=intelligence_snapshot_to_xlsx(snapshot),
         file_name="inteligencia_organizacional_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=intelligence_snapshot_to_csv(snapshot),
         file_name="inteligencia_organizacional_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=intelligence_snapshot_to_markdown(snapshot),
         file_name="inteligencia_organizacional_synapse.md",
         mime="text/markdown",
@@ -1196,19 +1196,19 @@ def _render_sentiment_report(report: SentimentReport) -> None:
 
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=sentiment_report_to_xlsx(report),
         file_name="sentimentos_organizacionais_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=sentiment_report_to_csv(report),
         file_name="sentimentos_organizacionais_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=sentiment_report_to_markdown(report),
         file_name="sentimentos_organizacionais_synapse.md",
         mime="text/markdown",
@@ -1248,19 +1248,19 @@ def _render_preventive_alert_report(report: PreventiveAlertReport) -> None:
 
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=preventive_alert_report_to_xlsx(report),
         file_name="alertas_preventivos_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=preventive_alert_report_to_csv(report),
         file_name="alertas_preventivos_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=preventive_alert_report_to_markdown(report),
         file_name="alertas_preventivos_synapse.md",
         mime="text/markdown",
@@ -1303,19 +1303,19 @@ def _render_historical_pattern_report(report: HistoricalPatternReport) -> None:
 
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=historical_pattern_report_to_xlsx(report),
         file_name="padroes_historicos_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=historical_pattern_report_to_csv(report),
         file_name="padroes_historicos_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=historical_pattern_report_to_markdown(report),
         file_name="padroes_historicos_synapse.md",
         mime="text/markdown",
@@ -1365,19 +1365,19 @@ def _render_multi_agent_report(report: MultiAgentReport) -> None:
 
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=multi_agent_report_to_xlsx(report),
         file_name="orquestracao_multiagente_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=multi_agent_report_to_csv(report),
         file_name="orquestracao_multiagente_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=multi_agent_report_to_markdown(report),
         file_name="orquestracao_multiagente_synapse.md",
         mime="text/markdown",
@@ -1401,19 +1401,19 @@ def _render_action_plan(action_plan: ActionPlan) -> None:
             st.caption(f"Fontes: {', '.join(item.source_refs) or 'Fonte não indicada'}")
     export_cols = st.columns(3)
     export_cols[0].download_button(
-        "Baixar Excel",
+        "Exportar Excel",
         data=action_plan_to_xlsx(action_plan),
         file_name="plano_de_acao_synapse.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     export_cols[1].download_button(
-        "Baixar CSV",
+        "Exportar CSV",
         data=action_plan_to_csv(action_plan),
         file_name="plano_de_acao_synapse.csv",
         mime="text/csv; charset=utf-8",
     )
     export_cols[2].download_button(
-        "Baixar Markdown",
+        "Exportar Markdown",
         data=action_plan_to_markdown(action_plan),
         file_name="plano_de_acao_synapse.md",
         mime="text/markdown",

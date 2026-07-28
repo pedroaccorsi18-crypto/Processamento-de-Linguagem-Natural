@@ -10,7 +10,6 @@ from synapse_ai.auth.session import (
 )
 from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
-from synapse_ai.services.analysis_repository import list_recent_analyses
 from synapse_ai.services.audit_service import (
     AuditRecord,
     audit_records_to_markdown,
@@ -20,7 +19,8 @@ from synapse_ai.services.audit_service import (
     build_audit_summary,
     collect_source_references,
 )
-from synapse_ai.services.chunk_repository import list_document_chunks_by_references
+from synapse_ai.ui.cache import cached_document_chunks_by_references, cached_recent_analyses
+from synapse_ai.ui.state import current_tenant_id
 from synapse_ai.ui.theme import render_empty_state, render_page_header
 
 
@@ -54,9 +54,15 @@ def render_audit_page(config: AppConfig) -> None:
     update_auth_tokens(connection.access_token, connection.refresh_token)
     client = connection.client
 
-    analyses = list_recent_analyses(client, user.id, limit=50)
+    tenant_id = current_tenant_id(user)
+    analyses = cached_recent_analyses(client, tenant_id, user.id, 50)
     references = collect_source_references(analyses)
-    chunk_lookup = list_document_chunks_by_references(client, user.id, references)
+    chunk_lookup = cached_document_chunks_by_references(
+        client,
+        tenant_id,
+        user.id,
+        tuple(references),
+    )
     records = build_audit_records(analyses, chunk_lookup)
 
     if not records:

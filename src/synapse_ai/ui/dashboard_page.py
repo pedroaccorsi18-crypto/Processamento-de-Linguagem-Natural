@@ -16,17 +16,11 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.openai_client import create_openai_client
 from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
-from synapse_ai.services.analysis_repository import list_recent_analyses
 from synapse_ai.services.analysis_service import (
     describe_planned_analysis_capabilities,
 )
-from synapse_ai.services.chunk_repository import (
-    list_document_chunk_counts,
-)
-from synapse_ai.services.document_repository import list_user_documents
 from synapse_ai.services.report_service import (
     build_executive_report,
     executive_report_to_markdown,
@@ -34,7 +28,14 @@ from synapse_ai.services.report_service import (
     intelligent_report_to_markdown,
     intelligent_report_to_pdf,
 )
+from synapse_ai.ui.cache import (
+    cached_document_chunk_counts,
+    cached_recent_analyses,
+    cached_user_documents,
+    get_openai_client,
+)
 from synapse_ai.ui.dashboard_use_cases import build_intelligent_executive_report_use_case
+from synapse_ai.ui.state import current_tenant_id
 from synapse_ai.ui.theme import (
     render_callout,
     render_empty_state,
@@ -106,16 +107,18 @@ def render_dashboard_page(config: AppConfig) -> None:
     update_auth_tokens(connection.access_token, connection.refresh_token)
     client = connection.client
 
-    documents = list_user_documents(client, user.id, limit=50)
-    chunk_counts = list_document_chunk_counts(
+    tenant_id = current_tenant_id(user)
+    documents = cached_user_documents(client, tenant_id, user.id, 50)
+    chunk_counts = cached_document_chunk_counts(
         client,
+        tenant_id,
         user.id,
-        _document_ids(documents),
+        tuple(_document_ids(documents)),
         config.openai.embedding_model,
     )
-    analyses = list_recent_analyses(client, user.id, limit=50)
+    analyses = cached_recent_analyses(client, tenant_id, user.id, 50)
     summary = build_dashboard_summary(documents, chunk_counts, analyses)
-    openai_client = create_openai_client(config)
+    openai_client = get_openai_client(config)
 
     _render_dashboard_overview(summary)
     top_left, top_right = st.columns((0.9, 1.1))

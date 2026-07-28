@@ -9,7 +9,6 @@ from synapse_ai.auth.session import (
     set_auth_session,
     update_auth_tokens,
 )
-from synapse_ai.clients.openai_client import create_openai_client
 from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.models.user import AuthenticatedUser
@@ -17,10 +16,8 @@ from synapse_ai.services.audio_transcription_service import (
     AudioTranscriptionError,
     transcribe_audio,
 )
-from synapse_ai.services.chunk_repository import list_document_chunk_counts
 from synapse_ai.services.document_repository import (
     DocumentPersistenceError,
-    list_user_documents,
     save_parsed_document,
     update_document_storage_location,
 )
@@ -58,6 +55,17 @@ from synapse_ai.services.google_oauth_service import (
     generate_pkce_code_verifier,
     store_google_oauth_pending_authorization,
 )
+from synapse_ai.ui.cache import (
+    cached_document_chunk_counts,
+    cached_user_documents,
+    get_openai_client,
+    invalidate_data_cache,
+)
+from synapse_ai.ui.state import (
+    current_tenant_id,
+    remember_document_status,
+    remember_processed_document,
+)
 from synapse_ai.ui.theme import render_document_card, render_page_header, render_status_badge
 
 
@@ -89,11 +97,13 @@ def render_upload_page(config: AppConfig) -> None:
         return
     update_auth_tokens(connection.access_token, connection.refresh_token)
     client = connection.client
-    documents = list_user_documents(client, user.id)
-    chunk_counts = list_document_chunk_counts(
+    tenant_id = current_tenant_id(user)
+    documents = cached_user_documents(client, tenant_id, user.id, 50)
+    chunk_counts = cached_document_chunk_counts(
         client,
+        tenant_id,
         user.id,
-        _document_ids(documents),
+        tuple(_document_ids(documents)),
         config.openai.embedding_model,
     )
     upload_col, source_col = st.columns((1.1, 0.9))
@@ -182,12 +192,18 @@ def render_upload_page(config: AppConfig) -> None:
             try:
                 with st.spinner("Salvando documento e preparando trilha de auditoria..."):
                     saved_document = save_parsed_document(client, user.id, parsed_document)
+                    invalidate_data_cache()
             except DocumentPersistenceError as exc:
                 st.error(str(exc))
             else:
                 document_id = saved_document.get("id")
                 original_file_saved = False
                 if isinstance(document_id, str) and document_id:
+                    remember_processed_document(
+                        document_id,
+                        str(saved_document.get("filename") or parsed_document.filename),
+                    )
+                    remember_document_status(document_id, "extracted")
                     original_file_saved = _store_original_file(
                         client,
                         user.id,
@@ -309,7 +325,7 @@ def _parse_document_for_upload(
     if not is_audio_document(uploaded_document.filename):
         return parse_uploaded_document(uploaded_document)
 
-    openai_client = create_openai_client(config)
+    openai_client = get_openai_client(config)
     with st.spinner("Transcrevendo áudio para análise textual..."):
         transcription_text = transcribe_audio(
             openai_client,
@@ -431,8 +447,14 @@ def _import_google_drive_files(
                 st.warning(f"{downloaded_file.filename} já existe na base e foi ignorado.")
                 continue
             saved_document = save_parsed_document(client, user_id, parsed_document)
+            invalidate_data_cache()
             document_id = saved_document.get("id")
             if isinstance(document_id, str) and document_id:
+                remember_processed_document(
+                    document_id,
+                    str(saved_document.get("filename") or parsed_document.filename),
+                )
+                remember_document_status(document_id, "extracted")
                 _store_original_file(client, user_id, document_id, uploaded_document)
         except (
             AudioTranscriptionError,

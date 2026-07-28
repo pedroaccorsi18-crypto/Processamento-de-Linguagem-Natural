@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from synapse_ai.auth.session import initialize_session, is_authenticated
+from synapse_ai.auth.session import get_current_session_user, initialize_session, is_authenticated
 from synapse_ai.config import MissingConfigError, load_config
 from synapse_ai.ui.analysis_page import render_analysis_page
 from synapse_ai.ui.audit_page import render_audit_page
@@ -12,6 +12,7 @@ from synapse_ai.ui.intelligence_page import render_intelligence_page
 from synapse_ai.ui.login_page import render_login_page
 from synapse_ai.ui.navigation import private_navigation, public_navigation
 from synapse_ai.ui.register_page import render_register_page
+from synapse_ai.ui.state import initialize_ui_state, render_welcome_tour
 from synapse_ai.ui.theme import apply_synapse_theme
 from synapse_ai.ui.upload_page import (
     has_google_drive_oauth_return,
@@ -32,6 +33,7 @@ def main() -> None:
     configure_logging()
     apply_synapse_theme()
     initialize_session()
+    initialize_ui_state()
 
     try:
         config = load_config()
@@ -41,6 +43,9 @@ def main() -> None:
         st.stop()
 
     if is_authenticated():
+        user = get_current_session_user()
+        initialize_ui_state(user)
+        render_welcome_tour(user)
         selected_page = private_navigation()
         if selected_page == "dashboard":
             render_dashboard_page(config)

@@ -10,9 +10,11 @@ from synapse_ai.auth.session import (
 )
 from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
-from synapse_ai.services.analysis_repository import list_recent_analyses
-from synapse_ai.services.chunk_repository import list_document_chunk_counts
-from synapse_ai.services.document_repository import list_user_documents
+from synapse_ai.ui.cache import (
+    cached_document_chunk_counts,
+    cached_recent_analyses,
+    cached_user_documents,
+)
 from synapse_ai.ui.dashboard_page import (
     _document_ids,
     _filter_dashboard_analyses,
@@ -26,6 +28,7 @@ from synapse_ai.ui.dashboard_page import (
     _render_preventive_alerts,
     build_dashboard_summary,
 )
+from synapse_ai.ui.state import current_tenant_id
 from synapse_ai.ui.theme import render_callout, render_page_header
 
 
@@ -59,14 +62,16 @@ def render_intelligence_page(config: AppConfig) -> None:
     update_auth_tokens(connection.access_token, connection.refresh_token)
     client = connection.client
 
-    documents = list_user_documents(client, user.id, limit=50)
-    chunk_counts = list_document_chunk_counts(
+    tenant_id = current_tenant_id(user)
+    documents = cached_user_documents(client, tenant_id, user.id, 50)
+    chunk_counts = cached_document_chunk_counts(
         client,
+        tenant_id,
         user.id,
-        _document_ids(documents),
+        tuple(_document_ids(documents)),
         config.openai.embedding_model,
     )
-    analyses = list_recent_analyses(client, user.id, limit=50)
+    analyses = cached_recent_analyses(client, tenant_id, user.id, 50)
     filters = _render_dashboard_filters(analyses)
     filtered_analyses = _filter_dashboard_analyses(analyses, filters)
     summary = build_dashboard_summary(documents, chunk_counts, filtered_analyses)

@@ -23,7 +23,6 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.openai_client import create_openai_client
 from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.services.agent_service import (
@@ -38,23 +37,18 @@ from synapse_ai.services.alert_service import (
     preventive_alert_report_to_markdown,
     preventive_alert_report_to_xlsx,
 )
-from synapse_ai.services.analysis_repository import (
-    list_recent_analyses,
-)
 from synapse_ai.services.analysis_service import (
     ActionPlan,
     action_plan_to_csv,
     action_plan_to_markdown,
     action_plan_to_xlsx,
 )
-from synapse_ai.services.chunk_repository import list_document_chunk_counts
 from synapse_ai.services.comparison_service import (
     DocumentComparisonReport,
     document_comparison_to_csv,
     document_comparison_to_markdown,
     document_comparison_to_xlsx,
 )
-from synapse_ai.services.document_repository import list_user_documents_for_processing
 from synapse_ai.services.intelligence_service import (
     IntelligenceSnapshot,
     intelligence_snapshot_to_csv,
@@ -84,6 +78,14 @@ from synapse_ai.ui.analysis_use_cases import (
     build_preventive_alerts_use_case,
     build_sentiment_analysis_use_case,
 )
+from synapse_ai.ui.cache import (
+    cached_document_chunk_counts,
+    cached_recent_analyses,
+    cached_user_documents_for_processing,
+    get_openai_client,
+    invalidate_data_cache,
+)
+from synapse_ai.ui.state import current_tenant_id, remember_analysis_result
 from synapse_ai.ui.theme import render_callout, render_kpi_card, render_page_header
 
 
@@ -117,8 +119,9 @@ def render_analysis_page(config: AppConfig) -> None:
     update_auth_tokens(connection.access_token, connection.refresh_token)
     supabase_client = connection.client
 
-    openai_client = create_openai_client(config)
-    documents = list_user_documents_for_processing(supabase_client, user.id)
+    tenant_id = current_tenant_id(user)
+    openai_client = get_openai_client(config)
+    documents = cached_user_documents_for_processing(supabase_client, tenant_id, user.id)
 
     st.subheader("Base documental")
     render_callout(
@@ -133,10 +136,11 @@ def render_analysis_page(config: AppConfig) -> None:
         return
 
     document_options = _document_options(documents)
-    chunk_counts = list_document_chunk_counts(
+    chunk_counts = cached_document_chunk_counts(
         supabase_client,
+        tenant_id,
         user.id,
-        _document_ids(documents),
+        tuple(_document_ids(documents)),
         config.openai.embedding_model,
     )
     document_labels = list(document_options.keys())
@@ -237,6 +241,8 @@ def render_analysis_page(config: AppConfig) -> None:
         "Depois que os embeddings forem gerados, você pode fazer várias perguntas sem preparar "
         "os documentos novamente."
     )
+    with st.expander("Ajuda rápida: base semântica", expanded=False):
+        st.help(_semantic_base_help)
     with st.expander("Documentos disponíveis"):
         for index, document in enumerate(documents, start=1):
             st.write(_format_document_label(document, index))
@@ -250,6 +256,10 @@ def render_analysis_page(config: AppConfig) -> None:
     if st.button(
         f"Atualizar base semântica do escopo ({len(documents_to_index)} documento(s))",
         type="primary",
+        help=(
+            "Gera chunks e embeddings apenas para os documentos selecionados. Use quando "
+            "subir arquivos novos ou trocar o escopo de análise."
+        ),
     ):
         indexed_chunks = _index_documents(
             supabase_client,
@@ -299,7 +309,7 @@ def render_analysis_page(config: AppConfig) -> None:
     )
 
     st.divider()
-    _render_analysis_history(supabase_client, user.id)
+    _render_analysis_history(supabase_client, tenant_id, user.id)
 
 
 def _render_analysis_workflow_center(
@@ -555,12 +565,21 @@ def _render_multi_agent_workflow(
         "Executa agentes especializados para avaliar decisões, riscos, consistência "
         "documental, sentimentos e governança antes da consolidação final."
     )
+    with st.expander("Ajuda rápida: orquestração multiagente", expanded=False):
+        st.help(_multi_agent_help)
     save_to_history = _render_save_toggle(
         "Salvar no histórico e atualizar Dashboard",
         "Mantém o parecer multiagente para auditoria futura.",
         "save-multi-agent-workflow",
     )
-    if st.button("Executar agentes especializados", type="primary"):
+    if st.button(
+        "Executar agentes especializados",
+        type="primary",
+        help=(
+            "Roda perspectivas complementares sobre o mesmo escopo documental. É indicado "
+            "quando você precisa comparar riscos, decisões e recomendações."
+        ),
+    ):
         _generate_multi_agent_report(
             supabase_client,
             openai_client,
@@ -624,6 +643,24 @@ def _render_analysis_focus_hint() -> None:
         st.rerun()
 
 
+def _semantic_base_help() -> None:
+    """Prepara documentos para busca semântica.
+
+    Esta ação divide o texto em trechos e gera embeddings para o modelo atual. Ela não gera
+    uma resposta da IA sozinha e não precisa ser repetida a cada pergunta. Use quando subir
+    arquivos novos, trocar o escopo ou alterar o modelo de embeddings.
+    """
+
+
+def _multi_agent_help() -> None:
+    """Executa perspectivas especializadas sobre o mesmo escopo.
+
+    A orquestração multiagente compara decisões, riscos, consistência documental,
+    sentimentos e governança. Ela é mais poderosa que uma pergunta simples, mas também
+    consome mais tempo e chamadas de IA.
+    """
+
+
 def _index_documents(
     supabase_client: object,
     openai_client: object,
@@ -649,6 +686,7 @@ def _index_documents(
     output = result.value
     if output is None:
         return None
+    invalidate_data_cache()
     return output.indexed_chunks
 
 
@@ -686,6 +724,8 @@ def _answer_question(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Pergunta respondida com fontes")
         st.success("Análise salva no histórico.")
         st.toast("Análise salva no histórico.")
     else:
@@ -743,6 +783,8 @@ def _generate_action_plan(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Plano de ação")
         st.success("Plano de ação salvo no histórico.")
         st.toast("Plano de ação salvo no histórico.")
     else:
@@ -782,6 +824,8 @@ def _generate_intelligence_snapshot(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Inteligência organizacional")
         st.success("Inteligência organizacional salva no histórico.")
         st.toast("Inteligência organizacional salva no histórico.")
     else:
@@ -821,6 +865,8 @@ def _generate_document_comparison(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Comparação documental")
         st.success("Comparação documental salva no histórico.")
         st.toast("Comparação documental salva no histórico.")
     else:
@@ -860,6 +906,8 @@ def _generate_sentiment_report(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Sentimentos organizacionais")
         st.success("Análise de sentimentos organizacionais salva no histórico.")
         st.toast("Análise de sentimentos salva no histórico.")
     else:
@@ -899,6 +947,8 @@ def _generate_preventive_alert_report(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Alertas preventivos")
         st.success("Alertas preventivos salvos no histórico.")
         st.toast("Alertas preventivos salvos no histórico.")
     else:
@@ -938,6 +988,8 @@ def _generate_historical_pattern_report(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Padrões históricos")
         st.success("Padrões históricos salvos no histórico.")
         st.toast("Padrões históricos salvos no histórico.")
     else:
@@ -977,6 +1029,8 @@ def _generate_multi_agent_report(
     if output.persistence_warning:
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
+        invalidate_data_cache()
+        remember_analysis_result("Orquestração multiagente")
         st.success("Orquestração multiagente salva no histórico.")
         st.toast("Orquestração multiagente salva no histórico.")
     else:
@@ -1321,9 +1375,9 @@ def _render_action_plan(action_plan: ActionPlan) -> None:
             st.write(source.content)
 
 
-def _render_analysis_history(supabase_client: object, user_id: str) -> None:
+def _render_analysis_history(supabase_client: object, tenant_id: str, user_id: str) -> None:
     st.subheader("Histórico de análises")
-    analyses = list_recent_analyses(supabase_client, user_id)
+    analyses = cached_recent_analyses(supabase_client, tenant_id, user_id, 50)
     if not analyses:
         st.info("Nenhuma análise salva ainda.")
         return

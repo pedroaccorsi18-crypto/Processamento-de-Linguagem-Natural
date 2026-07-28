@@ -14,6 +14,7 @@ CopilotIntentKind = Literal["conversation", "navigation"]
 
 COPILOT_MESSAGES_KEY = "synapse_copilot_messages"
 COPILOT_MODEL_KEY = "synapse_copilot_model"
+COPILOT_PENDING_ACTION_KEY = "synapse_copilot_pending_action"
 
 COPILOT_SYSTEM_PROMPT = """
 Você é o Copiloto do Synapse AI, uma plataforma B2B de inteligência organizacional.
@@ -24,6 +25,7 @@ a entender métricas, escolher o próximo passo e usar a plataforma com confian�
 Regras de comportamento:
 - Responda em português do Brasil.
 - Seja claro, direto e acolhedor.
+- Comece pela resposta prática e finalize com o próximo passo recomendado.
 - Evite jargões técnicos quando houver uma explicação de produto mais simples.
 - Não prometa que executou ações que não foram acionadas pelo sistema.
 - Oriente o usuário para as áreas certas: Dashboard, Base documental, Estúdio de IA,
@@ -53,6 +55,7 @@ class CopilotIntent:
     target_page: str | None = None
     analysis_focus: str | None = None
     response: str | None = None
+    action_label: str | None = None
 
 
 def render_copilot(config: AppConfig) -> None:
@@ -68,34 +71,70 @@ def render_copilot(config: AppConfig) -> None:
         "O Copiloto mantém o histórico desta sessão enquanto você navega.",
     )
 
+    action_col, clear_col = st.columns([0.78, 0.22])
+    with action_col:
+        st.caption(
+            "Use o Copiloto para decidir o próximo passo, entender indicadores "
+            "ou navegar pelo produto."
+        )
+    with clear_col:
+        if st.button("Limpar conversa", use_container_width=True):
+            st.session_state.pop(COPILOT_MESSAGES_KEY, None)
+            st.session_state.pop(COPILOT_PENDING_ACTION_KEY, None)
+            st.toast("Conversa reiniciada.")
+            st.rerun()
+
     messages = _copilot_messages()
     if not messages:
         st.info(COPILOT_WELCOME_MESSAGE)
+        _render_quick_actions(config)
 
     for message in messages:
         with st.chat_message(message.role):
             st.markdown(message.content)
 
+    _render_pending_copilot_action()
+
     prompt = st.chat_input("Pergunte ao Copiloto ou peça uma ação dentro do Synapse")
     if not prompt:
         return
 
+    _handle_copilot_prompt(config, prompt)
+    st.rerun()
+
+
+def _render_quick_actions(config: AppConfig) -> None:
+    st.caption("Atalhos úteis para começar")
+    actions = (
+        (
+            "Priorizar alertas",
+            "Estou vendo alertas e evidências salvas. Qual é o melhor próximo passo?",
+        ),
+        ("Preparar base", "Quando devo preparar a base semântica e por que isso importa?"),
+        ("Gerar plano", "Quero gerar um plano de ação a partir dos documentos."),
+        ("Montar evidências", "Como eu preparo um pacote de evidências para apresentação?"),
+    )
+    columns = st.columns(len(actions))
+    for index, (label, synthetic_prompt) in enumerate(actions):
+        with columns[index]:
+            if st.button(label, use_container_width=True, key=f"copilot_quick_action_{index}"):
+                _handle_copilot_prompt(config, synthetic_prompt)
+                st.rerun()
+
+
+def _handle_copilot_prompt(config: AppConfig, prompt: str) -> None:
     _append_copilot_message("user", prompt)
-    with st.chat_message("user"):
-        st.markdown(prompt)
 
     intent = route_copilot_intent(prompt)
     if intent.kind == "navigation":
-        assistant_response = execute_copilot_intent(intent)
+        assistant_response = (
+            intent.response or "Encontrei a área mais adequada para esse próximo passo."
+        )
+        _store_pending_copilot_action(intent)
     else:
         assistant_response = _generate_copilot_answer(config, _copilot_messages())
 
     _append_copilot_message("assistant", assistant_response)
-    with st.chat_message("assistant"):
-        st.markdown(assistant_response)
-
-    if intent.kind == "navigation":
-        st.rerun()
 
 
 def route_copilot_intent(prompt: str) -> CopilotIntent:
@@ -104,64 +143,124 @@ def route_copilot_intent(prompt: str) -> CopilotIntent:
         return CopilotIntent(
             kind="navigation",
             target_page="dashboard",
-            response="Claro. Vou te levar para o Dashboard executivo.",
+            response=(
+                "O Dashboard é o melhor ponto de partida para uma leitura executiva. "
+                "Use-o para enxergar rapidamente volume documental, base preparada, "
+                "análises salvas, riscos e alertas que precisam de atenção. Depois, "
+                "aprofunde o que parecer crítico em Insights ou gere um plano de ação "
+                "no Estúdio de IA.\n\n"
+                "Posso abrir o Dashboard para você começar pela visão consolidada."
+            ),
+            action_label="Abrir Dashboard",
         )
     if _contains_any(clean_prompt, ("perguntar", "responder", "analisar", "estúdio", "estudio")):
         return CopilotIntent(
             kind="navigation",
             target_page="analysis",
             response=(
-                "Vamos para o Estúdio de IA. Lá você escolhe o escopo e gera respostas "
-                "com fontes."
+                "O Estúdio de IA é onde a investigação acontece. Primeiro escolha os documentos "
+                "que fazem parte do escopo, prepare a base semântica se ela estiver pendente e, "
+                "então, faça perguntas com fontes rastreáveis. Para perguntas críticas, valide as "
+                "evidências antes de tomar decisão executiva.\n\n"
+                "Posso abrir o Estúdio de IA para você seguir por esse fluxo."
             ),
+            action_label="Abrir Estúdio de IA",
         )
     if _contains_any(clean_prompt, ("plano de ação", "plano de acao", "tarefas", "responsáveis")):
         return CopilotIntent(
             kind="navigation",
             target_page="analysis",
             analysis_focus="action_plan",
-            response="Vou abrir o Estúdio de IA já orientado para gerar um plano de ação.",
+            response=(
+                "Para transformar análise em execução, o melhor caminho é gerar um plano de ação. "
+                "Ele organiza tarefas, responsáveis, prazos, evidências e riscos em uma estrutura "
+                "mais fácil de acompanhar. Antes de gerar, confirme se os documentos certos estão "
+                "no escopo e se a base está preparada.\n\n"
+                "Posso abrir o Estúdio de IA já no bloco de plano de ação."
+            ),
+            action_label="Gerar plano de ação",
         )
     if _contains_any(clean_prompt, ("padrões", "padroes", "recorrência", "recorrencia")):
         return CopilotIntent(
             kind="navigation",
             target_page="analysis",
             analysis_focus="historical_patterns",
-            response="Vou abrir o Estúdio de IA com foco em padrões históricos.",
+            response=(
+                "Padrões históricos ajudam a identificar recorrências: atrasos repetidos, riscos "
+                "que aparecem em mais de um documento, responsáveis recorrentes e sinais "
+                "de processo. Esse tipo de análise é mais forte quando você seleciona "
+                "documentos comparáveis entre si.\n\n"
+                "Posso abrir o Estúdio de IA no bloco de padrões históricos."
+            ),
+            action_label="Analisar padrões históricos",
         )
     if _contains_any(clean_prompt, ("multiagente", "agentes", "especialistas")):
         return CopilotIntent(
             kind="navigation",
             target_page="analysis",
             analysis_focus="multi_agent",
-            response="Vou abrir o Estúdio de IA com foco na orquestração multiagente.",
+            response=(
+                "A orquestração multiagente serve para olhar o mesmo conjunto documental "
+                "por lentes diferentes, como riscos, decisões, governança, consistência "
+                "e recomendações. Use quando você quiser uma leitura mais robusta antes "
+                "de consolidar uma decisão.\n\n"
+                "Posso abrir o Estúdio de IA no bloco de agentes especializados."
+            ),
+            action_label="Executar agentes especializados",
         )
     if _contains_any(clean_prompt, ("resumo", "resumir", "síntese", "sintese")):
         return CopilotIntent(
             kind="navigation",
             target_page="analysis",
-            response="Vou abrir o Estúdio de IA para você gerar uma síntese com fontes.",
+            response=(
+                "Para uma síntese confiável, use o Estúdio de IA com os documentos "
+                "corretos no escopo. A melhor pergunta costuma pedir decisões, riscos, "
+                "responsáveis, prazos e lacunas de evidência. "
+                "Assim a resposta já nasce pronta para discussão executiva.\n\n"
+                "Posso abrir o Estúdio de IA para você gerar uma síntese com fontes."
+            ),
+            action_label="Gerar síntese com fontes",
         )
     if _contains_any(clean_prompt, ("insights", "riscos", "alertas", "achados")):
         return CopilotIntent(
             kind="navigation",
             target_page="intelligence",
-            response="Vou abrir Insights para você investigar riscos, alertas e achados salvos.",
+            response=(
+                "Quando há muitos alertas e evidências, comece por Insights. Priorize "
+                "alertas críticos e de alta severidade, confira quais documentos sustentam "
+                "cada achado e separe o que exige decisão humana. Depois disso, o próximo "
+                "passo natural é gerar um plano de ação no Estúdio de IA e montar um "
+                "pacote em Evidências para apresentação.\n\n"
+                "Posso abrir Insights para você começar pelo diagnóstico."
+            ),
+            action_label="Abrir Insights",
         )
     if _contains_any(clean_prompt, ("evidências", "evidencias", "auditoria", "pacote")):
         return CopilotIntent(
             kind="navigation",
             target_page="audit",
             response=(
-                "Vou abrir Evidências para você revisar fontes, registros e pacotes "
-                "auditáveis."
+                "Evidências é a área certa quando você precisa mostrar rastreabilidade: "
+                "quais documentos foram analisados, quais fontes sustentaram respostas "
+                "e quais registros podem entrar em um pacote auditável. É o melhor "
+                "fechamento para apresentação, revisão externa ou validação com "
+                "responsáveis.\n\n"
+                "Posso abrir Evidências para você revisar e exportar o material."
             ),
+            action_label="Abrir Evidências",
         )
     if _contains_any(clean_prompt, ("upload", "subir", "enviar", "documento", "arquivo")):
         return CopilotIntent(
             kind="navigation",
             target_page="upload",
-            response="Perfeito. Vou abrir a Base documental para você enviar ou revisar arquivos.",
+            response=(
+                "A Base documental é onde o fluxo começa. Envie arquivos, revise se o "
+                "texto foi extraído corretamente e confirme se o documento ficou disponível "
+                "para preparação semântica. Depois do upload, vá ao Estúdio de IA para "
+                "escolher o escopo e preparar a base.\n\n"
+                "Posso abrir a Base documental para você enviar ou revisar arquivos."
+            ),
+            action_label="Abrir Base documental",
         )
     return CopilotIntent(kind="conversation")
 
@@ -171,7 +270,42 @@ def execute_copilot_intent(intent: CopilotIntent) -> str:
         st.session_state["pending_private_page"] = intent.target_page
     if intent.analysis_focus:
         st.session_state["analysis_focus"] = intent.analysis_focus
+    st.session_state.pop(COPILOT_PENDING_ACTION_KEY, None)
     return intent.response or "Pronto. Direcionei você para a área mais adequada."
+
+
+def _store_pending_copilot_action(intent: CopilotIntent) -> None:
+    if not intent.target_page:
+        st.session_state.pop(COPILOT_PENDING_ACTION_KEY, None)
+        return
+
+    st.session_state[COPILOT_PENDING_ACTION_KEY] = {
+        "target_page": intent.target_page,
+        "analysis_focus": intent.analysis_focus or "",
+        "label": intent.action_label or "Abrir área sugerida",
+    }
+
+
+def _render_pending_copilot_action() -> None:
+    pending_action = st.session_state.get(COPILOT_PENDING_ACTION_KEY)
+    if not isinstance(pending_action, dict):
+        return
+
+    label = pending_action.get("label")
+    target_page = pending_action.get("target_page")
+    analysis_focus = pending_action.get("analysis_focus")
+    if not isinstance(label, str) or not isinstance(target_page, str):
+        st.session_state.pop(COPILOT_PENDING_ACTION_KEY, None)
+        return
+
+    st.divider()
+    st.caption("Próxima ação sugerida")
+    if st.button(label, type="primary", use_container_width=True):
+        st.session_state["pending_private_page"] = target_page
+        if isinstance(analysis_focus, str) and analysis_focus:
+            st.session_state["analysis_focus"] = analysis_focus
+        st.session_state.pop(COPILOT_PENDING_ACTION_KEY, None)
+        st.rerun()
 
 
 def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) -> str:
@@ -222,10 +356,20 @@ def _build_copilot_input(messages: list[CopilotMessage]) -> str:
         f"{'Usuário' if message.role == 'user' else 'Copiloto'}: {message.content}"
         for message in recent_messages
     )
+    current_area = _current_product_area()
     return (
+        "Mapa do produto:\n"
+        "- Dashboard: visão executiva, KPIs, alertas e indicadores consolidados.\n"
+        "- Base documental: upload, importação, documentos recentes e disponibilidade "
+        "dos arquivos.\n"
+        "- Estúdio de IA: perguntas com fontes, plano de ação, padrões históricos e multiagente.\n"
+        "- Insights: análise de riscos, alertas preventivos e achados organizacionais.\n"
+        "- Evidências: auditoria, fontes salvas, registros e pacotes exportáveis.\n\n"
+        f"Área atual do usuário: {current_area}.\n\n"
         "Histórico recente da conversa no Synapse AI:\n"
         f"{transcript}\n\n"
-        "Responda à última mensagem do usuário de forma útil e objetiva."
+        "Responda à última mensagem do usuário de forma útil e objetiva. "
+        "Quando fizer sentido, indique o próximo passo dentro do produto."
     )
 
 
@@ -278,3 +422,18 @@ def _extract_response_text(response: object) -> str:
 
 def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
+
+
+def _current_product_area() -> str:
+    page = st.session_state.get("private_page") or st.session_state.get("selected_page")
+    labels = {
+        "dashboard": "Dashboard",
+        "upload": "Base documental",
+        "analysis": "Estúdio de IA",
+        "intelligence": "Insights",
+        "audit": "Evidências",
+        "copilot": "Copiloto",
+    }
+    if isinstance(page, str):
+        return labels.get(page, page)
+    return "não identificada"

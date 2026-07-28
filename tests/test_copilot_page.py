@@ -9,6 +9,9 @@ def test_route_copilot_intent_detects_action_plan_before_document_upload() -> No
     assert intent.kind == "navigation"
     assert intent.target_page == "analysis"
     assert intent.analysis_focus == "action_plan"
+    assert intent.action_label == "Gerar plano de ação"
+    assert intent.response is not None
+    assert "responsáveis" in intent.response
 
 
 def test_route_copilot_intent_detects_insights_navigation() -> None:
@@ -16,6 +19,10 @@ def test_route_copilot_intent_detects_insights_navigation() -> None:
 
     assert intent.kind == "navigation"
     assert intent.target_page == "intelligence"
+    assert intent.action_label == "Abrir Insights"
+    assert intent.response is not None
+    assert "plano de ação" in intent.response
+    assert "Evidências" in intent.response
 
 
 def test_route_copilot_intent_keeps_general_questions_conversational() -> None:
@@ -23,6 +30,16 @@ def test_route_copilot_intent_keeps_general_questions_conversational() -> None:
 
     assert intent.kind == "conversation"
     assert intent.target_page is None
+
+
+def test_route_copilot_intent_guides_upload_without_immediate_execution() -> None:
+    intent = route_copilot_intent("Preciso subir um arquivo novo")
+
+    assert intent.kind == "navigation"
+    assert intent.target_page == "upload"
+    assert intent.action_label == "Abrir Base documental"
+    assert intent.response is not None
+    assert "preparação semântica" in intent.response
 
 
 def test_resolve_openai_api_key_prefers_top_level_secret() -> None:

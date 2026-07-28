@@ -116,7 +116,7 @@ def _render_audit_summary(records: list[AuditRecord]) -> None:
     metric_cols[3].metric("Sem evidência", summary.missing_evidence)
     metric_cols[4].metric("Nomes duplicados", summary.duplicate_filename_records)
     if summary.missing_evidence:
-        st.warning("Há fontes salvas cujo trecho não foi encontrado na base semântica atual.")
+        st.warning("Há fontes salvas cujo trecho não foi encontrado na busca atual.")
     if summary.duplicate_filename_records:
         st.info("Há registros com documentos de mesmo nome. Confira identificadores e datas.")
 

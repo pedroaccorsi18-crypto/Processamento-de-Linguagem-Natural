@@ -508,6 +508,69 @@ def apply_synapse_theme() -> None:
             font-weight: 850 !important;
         }
 
+        .synapse-case-card {
+            background: var(--synapse-surface);
+            border: 1px solid var(--synapse-border);
+            border-radius: var(--synapse-radius-lg);
+            padding: 1.35rem;
+            min-height: 330px;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+        }
+
+        .synapse-case-card.is-chaos {
+            border-color: #fed7aa;
+            background: linear-gradient(180deg, #fffaf5 0%, #ffffff 100%);
+        }
+
+        .synapse-case-card.is-synthesis {
+            border-color: #bfdbfe;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+        }
+
+        .synapse-case-card h3 {
+            margin: 0 0 0.8rem 0;
+            color: var(--synapse-ink);
+            font-size: 1.35rem !important;
+        }
+
+        .synapse-case-card p {
+            color: #475569;
+            line-height: 1.58;
+            margin: 0 0 1.1rem 0;
+        }
+
+        .synapse-mini-screen {
+            border: 1px solid var(--synapse-border);
+            border-radius: 12px;
+            background: #f8fafc;
+            padding: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .synapse-mini-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.62rem 0;
+            border-bottom: 1px solid #e2e8f0;
+            color: #334155;
+            font-size: 0.86rem;
+        }
+
+        .synapse-mini-row:last-child {
+            border-bottom: 0;
+        }
+
+        .synapse-mini-pill {
+            border-radius: 999px;
+            padding: 0.18rem 0.55rem;
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: #0f172a;
+            background: #e0f2fe;
+        }
+
         .synapse-hero-panel {
             background: #111827;
             border-radius: 18px;
@@ -596,6 +659,11 @@ def apply_synapse_theme() -> None:
             }
 
             .synapse-empty-state {
+                padding: 1rem;
+            }
+
+            .synapse-case-card {
+                min-height: auto;
                 padding: 1rem;
             }
         }

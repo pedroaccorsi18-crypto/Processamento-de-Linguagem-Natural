@@ -75,21 +75,61 @@ def _render_case_study_section() -> None:
     )
     before_col, after_col = st.columns(2)
     with before_col:
-        st.markdown("### O Caos (Antes)")
-        st.write(
-            "O conhecimento da sua empresa está preso em silos. Analistas perdem horas "
-            "vasculhando dezenas de páginas, relatórios e transcrições cruzadas. O resultado? "
-            "Decisões lentas baseadas em informações fragmentadas."
+        st.markdown(
+            """
+            <article class="synapse-case-card is-chaos">
+                <h3>O Caos (Antes)</h3>
+                <p>
+                    O conhecimento da sua empresa está preso em silos. Analistas perdem horas
+                    vasculhando dezenas de páginas, relatórios e transcrições cruzadas. O resultado?
+                    Decisões lentas baseadas em informações fragmentadas.
+                </p>
+                <div class="synapse-mini-screen">
+                    <div class="synapse-mini-row">
+                        <span>Contratos dispersos</span>
+                        <span class="synapse-mini-pill">manual</span>
+                    </div>
+                    <div class="synapse-mini-row">
+                        <span>Transcrições sem leitura consolidada</span>
+                        <span class="synapse-mini-pill">lento</span>
+                    </div>
+                    <div class="synapse-mini-row">
+                        <span>Riscos sem rastreabilidade clara</span>
+                        <span class="synapse-mini-pill">alto atrito</span>
+                    </div>
+                </div>
+            </article>
+            """,
+            unsafe_allow_html=True,
         )
-        st.info("Placeholder visual: screenshot_caos_dados.png")
     with after_col:
-        st.markdown("### A Síntese (Depois)")
-        st.write(
-            "Orquestração Multiagente em ação. O Synapse AI lê, cruza e sintetiza milhares "
-            "de páginas instantaneamente. Receba relatórios executivos sob demanda, com links "
-            "diretos para as fontes originais."
+        st.markdown(
+            """
+            <article class="synapse-case-card is-synthesis">
+                <h3>A Síntese (Depois)</h3>
+                <p>
+                    Orquestração Multiagente em ação. O Synapse AI lê, cruza e sintetiza milhares
+                    de páginas instantaneamente. Receba relatórios executivos sob demanda, com links
+                    diretos para as fontes originais.
+                </p>
+                <div class="synapse-mini-screen">
+                    <div class="synapse-mini-row">
+                        <span>Resposta com fontes verificáveis</span>
+                        <span class="synapse-mini-pill">RAG</span>
+                    </div>
+                    <div class="synapse-mini-row">
+                        <span>Alertas, planos e evidências salvas</span>
+                        <span class="synapse-mini-pill">executivo</span>
+                    </div>
+                    <div class="synapse-mini-row">
+                        <span>Insights prontos para decisão</span>
+                        <span class="synapse-mini-pill">ativo</span>
+                    </div>
+                </div>
+            </article>
+            """,
+            unsafe_allow_html=True,
         )
-        st.success("Placeholder visual: screenshot_dashboard_inteligencia.png")
 
 
 def _telemetry_settings() -> Mapping[str, Any]:

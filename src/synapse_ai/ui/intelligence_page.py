@@ -34,7 +34,7 @@ from synapse_ai.ui.theme import render_callout, render_page_header
 
 def render_intelligence_page(config: AppConfig) -> None:
     render_page_header(
-        "Inteligência organizacional",
+        "Insights organizacionais",
         "Explore alertas, padrões, planos de ação e achados especializados gerados a partir "
         "da base documental.",
         "Insights consolidados",
@@ -79,7 +79,7 @@ def render_intelligence_page(config: AppConfig) -> None:
     render_callout(
         "Como usar esta área",
         "Use esta página para investigar o que já foi descoberto. Para gerar novas respostas, "
-        "planos ou agentes, vá para Análises.",
+        "planos ou agentes, vá para o Estúdio de IA.",
     )
     _render_dashboard_charts(filtered_analyses)
     _render_preventive_alerts(filtered_analyses)

@@ -72,7 +72,7 @@ from synapse_ai.ui.theme import render_document_card, render_page_header, render
 def render_upload_page(config: AppConfig) -> None:
     render_page_header(
         "Ingestão documental",
-        "Envie documentos locais ou conecte fontes corporativas para alimentar a base semântica.",
+        "Envie documentos locais ou conecte fontes corporativas para preparar sua inteligência.",
         "Upload",
     )
 

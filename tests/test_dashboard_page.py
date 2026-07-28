@@ -173,6 +173,6 @@ def test_build_next_best_steps_prioritizes_readiness_and_risk() -> None:
 
     steps = _build_next_best_steps(summary)
 
-    assert steps[0].startswith("Atualize a base semântica")
+    assert steps[0].startswith("Prepare 2 documento")
     assert steps[1].startswith("Revise 1 alerta")
     assert steps[2].startswith("Gere um plano de ação")

@@ -91,9 +91,10 @@ from synapse_ai.ui.theme import render_callout, render_kpi_card, render_page_hea
 
 def render_analysis_page(config: AppConfig) -> None:
     render_page_header(
-        "Análises inteligentes",
-        "Escolha documentos, prepare embeddings quando necessário e gere respostas com fontes.",
-        "RAG e inteligência aplicada",
+        "Estúdio de IA",
+        "Escolha o escopo, faça perguntas com fontes ou gere análises especializadas "
+        "em poucos passos.",
+        "Inteligência aplicada",
     )
     _render_analysis_focus_hint()
 
@@ -123,9 +124,9 @@ def render_analysis_page(config: AppConfig) -> None:
     openai_client = get_openai_client(config)
     documents = cached_user_documents_for_processing(supabase_client, tenant_id, user.id)
 
-    st.subheader("Base documental")
+    st.subheader("Escopo de trabalho")
     render_callout(
-        "Escopo antes da pergunta",
+        "Antes de perguntar, escolha o contexto",
         "A IA consulta apenas os documentos selecionados abaixo. Isso evita misturar "
         "assuntos diferentes e mantém a resposta mais precisa.",
     )
@@ -146,7 +147,7 @@ def render_analysis_page(config: AppConfig) -> None:
     document_labels = list(document_options.keys())
     st.caption(
         "A IA usa somente os documentos do escopo abaixo. Documentos preparados continuam na "
-        "base semântica, mas não entram na análise se não estiverem selecionados."
+        "busca interna, mas não entram na análise se não estiverem selecionados."
     )
     scope_mode = st.radio(
         "Escopo da análise",
@@ -206,8 +207,8 @@ def render_analysis_page(config: AppConfig) -> None:
     ]
     if unprepared_documents:
         st.info(
-            "Há documento(s) selecionado(s) ainda sem base semântica para o modelo atual. "
-            "Atualize a base antes de perguntar para incluir esses arquivos na busca."
+            "Há documento(s) selecionado(s) ainda não preparado(s) para IA. Prepare o escopo "
+            "antes de perguntar para incluir esses arquivos na busca."
         )
     total_chars = sum(_as_int(document.get("text_char_count")) for document in documents)
     selected_chars = sum(
@@ -230,18 +231,17 @@ def render_analysis_page(config: AppConfig) -> None:
         )
     with metric_cols[2]:
         render_kpi_card(
-            "Modelo",
-            config.openai.embedding_model,
-            "Embedding usado na base semântica.",
+            "Preparação",
+            "Pendente" if unprepared_documents else "Pronto",
+            "Indica se o escopo selecionado já pode responder com fontes.",
             tone="amber" if unprepared_documents else "green",
         )
 
     st.caption(
-        "Use esta etapa quando enviar novos documentos ou quiser atualizar a base semântica. "
-        "Depois que os embeddings forem gerados, você pode fazer várias perguntas sem preparar "
-        "os documentos novamente."
+        "Prepare documentos quando enviar arquivos novos ou mudar o escopo. Depois disso, "
+        "você pode fazer várias perguntas sem repetir esta etapa."
     )
-    with st.expander("Ajuda rápida: base semântica", expanded=False):
+    with st.expander("Ajuda rápida: preparação para IA", expanded=False):
         st.help(_semantic_base_help)
     with st.expander("Documentos disponíveis"):
         for index, document in enumerate(documents, start=1):
@@ -254,11 +254,11 @@ def render_analysis_page(config: AppConfig) -> None:
 
     documents_to_index = selected_documents
     if st.button(
-        f"Atualizar base semântica do escopo ({len(documents_to_index)} documento(s))",
+        f"Preparar documentos selecionados para IA ({len(documents_to_index)} documento(s))",
         type="primary",
         help=(
-            "Gera chunks e embeddings apenas para os documentos selecionados. Use quando "
-            "subir arquivos novos ou trocar o escopo de análise."
+            "Cria a estrutura interna de busca apenas para os documentos selecionados. Use "
+            "quando subir arquivos novos ou trocar o escopo de análise."
         ),
     ):
         indexed_chunks = _index_documents(
@@ -270,46 +270,49 @@ def render_analysis_page(config: AppConfig) -> None:
         )
         if indexed_chunks is not None:
             st.session_state["semantic_index_success"] = (
-                f"Base semântica atualizada com {indexed_chunks} trechos. "
+                f"Documentos preparados para IA com {indexed_chunks} trecho(s). "
                 "Agora você pode fazer várias perguntas usando esta mesma preparação."
             )
             st.rerun()
 
-    st.divider()
-    st.subheader("Perguntar ao Synapse AI")
-    question = st.text_area(
-        "Pergunta",
-        placeholder="Quais decisões, riscos ou inconsistências aparecem nos documentos?",
-        height=110,
+    question_tab, workflow_tab, history_tab = st.tabs(
+        ["Perguntar com fontes", "Gerar análises", "Histórico"]
     )
-    save_to_history = st.checkbox(
-        "Salvar esta análise no histórico",
-        value=True,
-        help="Use quando precisar manter uma trilha auditável da pergunta e da resposta.",
-    )
+    with question_tab:
+        st.subheader("Perguntar ao Synapse AI")
+        question = st.text_area(
+            "Pergunta",
+            placeholder="Quais decisões, riscos ou inconsistências aparecem nos documentos?",
+            height=110,
+        )
+        save_to_history = st.checkbox(
+            "Salvar esta análise no histórico",
+            value=True,
+            help="Use quando precisar manter uma trilha auditável da pergunta e da resposta.",
+        )
 
-    if st.button("Responder com fontes", type="primary"):
-        _answer_question(
+        if st.button("Responder com fontes", type="primary"):
+            _answer_question(
+                supabase_client,
+                openai_client,
+                user.id,
+                question,
+                config,
+                save_to_history,
+                selected_document_ids,
+            )
+
+    with workflow_tab:
+        _render_analysis_workflow_center(
             supabase_client,
             openai_client,
             user.id,
-            question,
             config,
-            save_to_history,
             selected_document_ids,
         )
 
-    st.divider()
-    _render_analysis_workflow_center(
-        supabase_client,
-        openai_client,
-        user.id,
-        config,
-        selected_document_ids,
-    )
-
-    st.divider()
-    _render_analysis_history(supabase_client, tenant_id, user.id)
+    with history_tab:
+        _render_analysis_history(supabase_client, tenant_id, user.id)
 
 
 def _render_analysis_workflow_center(
@@ -319,10 +322,10 @@ def _render_analysis_workflow_center(
     config: AppConfig,
     selected_document_ids: list[str],
 ) -> None:
-    st.subheader("Central de análises")
+    st.subheader("Gerar análises especializadas")
     st.write(
-        "Escolha uma capacidade de IA para o escopo documental atual. Os resultados ficam "
-        "salvos por padrão para alimentar Dashboard, Auditoria e relatórios executivos."
+        "Escolha uma capacidade para transformar o escopo atual em evidências, alertas, "
+        "comparações ou planos acompanháveis."
     )
 
     workflow_labels = [
@@ -619,17 +622,17 @@ def _render_analysis_focus_hint() -> None:
     hints = {
         "action_plan": (
             "Plano de ação",
-            "Selecione os documentos, confira se a base semântica está pronta e desça até "
-            "a Central de análises. O tipo Plano de ação já estará selecionado.",
+            "Selecione os documentos, confirme se eles estão prontos para IA e abra a aba "
+            "Gerar análises. O tipo Plano de ação já estará selecionado.",
         ),
         "historical_patterns": (
             "Padrões históricos",
-            "Selecione os documentos, confira se há análises anteriores salvas e desça até "
-            "a Central de análises. O tipo Padrões históricos já estará selecionado.",
+            "Selecione os documentos, confira se há análises anteriores salvas e abra a aba "
+            "Gerar análises. O tipo Padrões históricos já estará selecionado.",
         ),
         "multi_agent": (
             "Orquestração multiagente",
-            "Selecione os documentos e desça até a Central de análises. O tipo Orquestração "
+            "Selecione os documentos e abra a aba Gerar análises. O tipo Orquestração "
             "multiagente já estará selecionado.",
         ),
     }
@@ -644,11 +647,12 @@ def _render_analysis_focus_hint() -> None:
 
 
 def _semantic_base_help() -> None:
-    """Prepara documentos para busca semântica.
+    """Prepara documentos para perguntas com fontes.
 
-    Esta ação divide o texto em trechos e gera embeddings para o modelo atual. Ela não gera
-    uma resposta da IA sozinha e não precisa ser repetida a cada pergunta. Use quando subir
-    arquivos novos, trocar o escopo ou alterar o modelo de embeddings.
+    Esta ação organiza o conteúdo em trechos pesquisáveis e cria os vetores internos usados
+    pela busca semântica. Ela não gera uma resposta sozinha e não precisa ser repetida a cada
+    pergunta. Use quando subir arquivos novos, trocar o escopo ou alterar o modelo técnico de
+    preparação.
     """
 
 
@@ -669,7 +673,7 @@ def _index_documents(
     config: AppConfig,
 ) -> int | None:
     prepare_semantic_base_use_case = build_prepare_semantic_base_use_case()
-    with st.spinner("Gerando chunks e embeddings..."):
+    with st.spinner("Preparando documentos para IA..."):
         result = prepare_semantic_base_use_case.execute(
             PrepareSemanticBaseCommand(
                 supabase_client=supabase_client,

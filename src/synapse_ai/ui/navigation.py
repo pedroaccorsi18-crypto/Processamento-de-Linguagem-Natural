@@ -42,8 +42,8 @@ def _private_label(page: str) -> str:
     labels = {
         "dashboard": "Dashboard",
         "upload": "Base documental",
-        "analysis": "Análises",
-        "intelligence": "Inteligência",
+        "analysis": "Estúdio de IA",
+        "intelligence": "Insights",
         "audit": "Evidências",
     }
     return labels[page]

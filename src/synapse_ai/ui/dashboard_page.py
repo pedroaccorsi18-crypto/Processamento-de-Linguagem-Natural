@@ -121,12 +121,8 @@ def render_dashboard_page(config: AppConfig) -> None:
     openai_client = get_openai_client(config)
 
     _render_dashboard_overview(summary)
-    top_left, top_right = st.columns((0.9, 1.1))
-    with top_left:
-        _render_next_best_steps(summary)
-    with top_right:
-        _render_document_health(documents, chunk_counts)
     _render_dashboard_attention(summary, analyses)
+    _render_next_best_steps(summary)
     _render_executive_report_downloads(
         client,
         openai_client,
@@ -291,8 +287,8 @@ def _render_dashboard_overview(summary: DashboardSummary) -> None:
     st.subheader("Leitura executiva")
     render_callout(
         "Como interpretar este painel",
-        "O Dashboard mostra se a base já está pronta para IA, quais riscos merecem atenção "
-        "e quais análises já viraram evidência reutilizável.",
+        "O Dashboard resume maturidade da base, sinais de risco e próximos passos. Detalhes "
+        "operacionais ficam em Base documental, Estúdio de IA, Insights e Evidências.",
     )
 
     metric_cols = st.columns(4)
@@ -305,7 +301,7 @@ def _render_dashboard_overview(summary: DashboardSummary) -> None:
         )
     with metric_cols[1]:
         render_kpi_card(
-            "Análises",
+            "Evidências",
             summary.saved_analyses,
             "Perguntas, relatórios e evidências salvas.",
             tone="blue",
@@ -329,9 +325,9 @@ def _render_dashboard_overview(summary: DashboardSummary) -> None:
         st.progress(
             summary.prepared_documents / summary.total_documents,
             text=(
-                "Cobertura semântica: "
+                "Preparação para IA: "
                 f"{summary.prepared_documents} de {summary.total_documents} documento(s) "
-                "preparado(s) para IA"
+                "pronto(s) para perguntas com fontes"
             ),
         )
     else:
@@ -351,7 +347,7 @@ def _render_dashboard_charts(analyses: list[dict[str, object]]) -> None:
     if not alerts:
         render_empty_state(
             "Ainda não há riscos mapeados.",
-            "Gere alertas preventivos na aba Análises para visualizar severidade, "
+            "Gere alertas preventivos no Estúdio de IA para visualizar severidade, "
             "recorrência e evolução do risco organizacional.",
             icon="!",
         )
@@ -458,10 +454,10 @@ def _render_dashboard_attention(
 
     if not critical_alerts and not high_priority_items and summary.saved_analyses:
         st.success(
-            "Nenhum item crítico consolidado no momento. Use a aba Inteligência para explorar "
+            "Nenhum item crítico consolidado no momento. Use Insights para explorar "
             "alertas, padrões e achados por perspectiva."
         )
-        if st.button("Abrir Inteligência", key="cta-dashboard-intelligence", type="primary"):
+        if st.button("Abrir Insights", key="cta-dashboard-intelligence", type="primary"):
             st.session_state["pending_private_page"] = "intelligence"
             st.rerun()
         return
@@ -473,7 +469,11 @@ def _render_dashboard_attention(
             "planos de ação e relatórios executivos.",
             icon="IA",
         )
-        if st.button("Ir para Análises", key="cta-dashboard-analysis-empty", type="primary"):
+        if st.button(
+            "Ir para Estúdio de IA",
+            key="cta-dashboard-analysis-empty",
+            type="primary",
+        ):
             st.session_state["pending_private_page"] = "analysis"
             st.rerun()
         return
@@ -493,7 +493,7 @@ def _render_dashboard_attention(
             "Tarefas e decisões que precisam de acompanhamento.",
             tone="amber" if high_priority_items else "green",
         )
-    if st.button("Investigar na aba Inteligência", key="cta-dashboard-intelligence-detail"):
+    if st.button("Investigar em Insights", key="cta-dashboard-intelligence-detail"):
         st.session_state["pending_private_page"] = "intelligence"
         st.rerun()
 
@@ -505,8 +505,8 @@ def _build_next_best_steps(summary: DashboardSummary) -> list[str]:
     steps: list[str] = []
     if summary.pending_documents:
         steps.append(
-            f"Atualize a base semântica para preparar {summary.pending_documents} "
-            "documento(s) ainda pendente(s)."
+            f"Prepare {summary.pending_documents} documento(s) para IA antes de fazer perguntas "
+            "com fontes."
         )
     if summary.critical_preventive_alerts:
         steps.append(
@@ -519,7 +519,7 @@ def _build_next_best_steps(summary: DashboardSummary) -> list[str]:
             "de ação."
         )
     if summary.saved_analyses == 0:
-        steps.append("Faça uma pergunta na aba Análises para gerar as primeiras evidências.")
+        steps.append("Faça uma pergunta no Estúdio de IA para gerar as primeiras evidências.")
     elif summary.action_plans == 0:
         steps.append("Gere um plano de ação para transformar achados em tarefas acompanháveis.")
     if not steps:
@@ -568,7 +568,7 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
     action_items = _extract_action_items(action_plans)
     if not action_items:
         st.info(
-            "Nenhum plano de ação salvo ainda. Gere um plano de ação na aba Análises "
+            "Nenhum plano de ação salvo ainda. Gere um plano de ação no Estúdio de IA "
             "para acompanhar tarefas, prazos, responsáveis e riscos."
         )
         _render_analysis_cta(
@@ -695,7 +695,7 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
     if not patterns:
         st.info(
             "Nenhum padrão histórico salvo ainda. Gere uma análise de padrões históricos "
-            "na aba Análises para identificar recorrências entre documentos."
+            "no Estúdio de IA para identificar recorrências entre documentos."
         )
         _render_analysis_cta(
             "Ir para padrões históricos",
@@ -742,7 +742,7 @@ def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
     if not findings:
         st.info(
             "Nenhuma orquestração multiagente salva ainda. Gere uma análise multiagente "
-            "na aba Análises para comparar achados, riscos e recomendações por perspectiva."
+            "no Estúdio de IA para comparar achados, riscos e recomendações por perspectiva."
         )
         _render_analysis_cta(
             "Ir para orquestração multiagente",

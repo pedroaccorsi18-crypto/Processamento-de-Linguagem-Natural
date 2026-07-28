@@ -107,8 +107,8 @@ def render_welcome_tour(
 
     session[WELCOME_TOUR_SHOWN_KEY] = True
     st.toast(
-        "Bem-vindo ao Synapse AI. Comece pela Base documental, prepare a IA e use Análises "
-        "para gerar inteligência com fontes.",
+        "Bem-vindo ao Synapse AI. Comece pela Base documental, prepare a IA e use o "
+        "Estúdio de IA para gerar inteligência com fontes.",
     )
 
 

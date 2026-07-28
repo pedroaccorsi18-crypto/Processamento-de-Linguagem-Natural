@@ -242,7 +242,7 @@ def render_analysis_page(config: AppConfig) -> None:
         "você pode fazer várias perguntas sem repetir esta etapa."
     )
     with st.expander("Ajuda rápida: preparação para IA", expanded=False):
-        st.help(_semantic_base_help)
+        st.markdown(_semantic_base_help())
     with st.expander("Documentos disponíveis"):
         for index, document in enumerate(documents, start=1):
             st.write(_format_document_label(document, index))
@@ -615,7 +615,7 @@ def _render_multi_agent_workflow(
         "documental, sentimentos e governança antes da consolidação final."
     )
     with st.expander("Ajuda rápida: orquestração multiagente", expanded=False):
-        st.help(_multi_agent_help)
+        st.markdown(_multi_agent_help())
     save_to_history = _render_save_toggle(
         "Salvar no histórico e atualizar Dashboard",
         "Mantém o parecer multiagente para auditoria futura.",
@@ -692,23 +692,26 @@ def _render_analysis_focus_hint() -> None:
         st.rerun()
 
 
-def _semantic_base_help() -> None:
-    """Prepara documentos para perguntas com fontes.
+def _semantic_base_help() -> str:
+    return (
+        "**O que acontece nesta etapa:** o Synapse organiza o texto dos documentos em "
+        "trechos pesquisáveis para conseguir responder com fontes.\n\n"
+        "**Quando usar:** depois de enviar arquivos novos, mudar o escopo da análise ou "
+        "quando algum documento aparecer como pendente.\n\n"
+        "**Quando não precisa repetir:** depois que o escopo estiver pronto, você pode "
+        "fazer várias perguntas sobre os mesmos documentos sem preparar tudo novamente."
+    )
 
-    Esta ação organiza o conteúdo em trechos pesquisáveis e cria os vetores internos usados
-    pela busca semântica. Ela não gera uma resposta sozinha e não precisa ser repetida a cada
-    pergunta. Use quando subir arquivos novos, trocar o escopo ou alterar o modelo técnico de
-    preparação.
-    """
 
-
-def _multi_agent_help() -> None:
-    """Executa perspectivas especializadas sobre o mesmo escopo.
-
-    A orquestração multiagente compara decisões, riscos, consistência documental,
-    sentimentos e governança. Ela é mais poderosa que uma pergunta simples, mas também
-    consome mais tempo e chamadas de IA.
-    """
+def _multi_agent_help() -> str:
+    return (
+        "**O que acontece nesta etapa:** o Synapse executa perspectivas especializadas "
+        "sobre o mesmo conjunto de documentos.\n\n"
+        "**Quando usar:** quando você precisa comparar riscos, decisões, consistência "
+        "documental, sentimentos e governança em uma análise mais completa.\n\n"
+        "**Atenção:** esta análise tende a levar mais tempo do que uma pergunta simples, "
+        "porque aciona mais de uma perspectiva de IA."
+    )
 
 
 def _index_documents(

@@ -58,7 +58,7 @@ from synapse_ai.services.google_oauth_service import (
     generate_pkce_code_verifier,
     store_google_oauth_pending_authorization,
 )
-from synapse_ai.ui.theme import render_page_header
+from synapse_ai.ui.theme import render_document_card, render_page_header, render_status_badge
 
 
 def render_upload_page(config: AppConfig) -> None:
@@ -96,32 +96,38 @@ def render_upload_page(config: AppConfig) -> None:
         _document_ids(documents),
         config.openai.embedding_model,
     )
-    uploaded_file = st.file_uploader(
-        "Selecione um documento",
-        type=[
-            "pdf",
-            "docx",
-            "pptx",
-            "xlsx",
-            "txt",
-            "md",
-            "csv",
-            "json",
-            "vtt",
-            "eml",
-            "mp3",
-            "mp4",
-            "mpeg",
-            "mpga",
-            "m4a",
-            "wav",
-            "webm",
-            "ogg",
-        ],
-    )
-    st.caption("Formatos previstos: " + ", ".join(describe_supported_document_formats()))
-    st.caption("Limite nesta fase: 10 MB por arquivo.")
-    st.caption("O arquivo original fica guardado em storage privado para download futuro.")
+    upload_col, source_col = st.columns((1.1, 0.9))
+    with upload_col:
+        st.subheader("Enviar arquivo")
+        uploaded_file = st.file_uploader(
+            "Selecione um documento",
+            type=[
+                "pdf",
+                "docx",
+                "pptx",
+                "xlsx",
+                "txt",
+                "md",
+                "csv",
+                "json",
+                "vtt",
+                "eml",
+                "mp3",
+                "mp4",
+                "mpeg",
+                "mpga",
+                "m4a",
+                "wav",
+                "webm",
+                "ogg",
+            ],
+        )
+        st.caption("Formatos previstos: " + ", ".join(describe_supported_document_formats()))
+        st.caption("Limite nesta fase: 10 MB por arquivo.")
+        st.caption("O arquivo original fica guardado em storage privado para download futuro.")
+
+    with source_col:
+        _render_google_drive_import(config, client, user.id, documents)
 
     if uploaded_file is not None:
         uploaded_document = UploadedDocument(
@@ -130,7 +136,8 @@ def render_upload_page(config: AppConfig) -> None:
             content=uploaded_file.getvalue(),
         )
         try:
-            parsed_document = _parse_document_for_upload(config, uploaded_document)
+            with st.spinner("Extraindo texto e metadados do documento..."):
+                parsed_document = _parse_document_for_upload(config, uploaded_document)
         except (AudioTranscriptionError, DocumentProcessingError, RuntimeError) as exc:
             st.error(str(exc))
             return
@@ -171,9 +178,10 @@ def render_upload_page(config: AppConfig) -> None:
             )
             button_label = "Salvar nova versão"
 
-        if st.button(button_label, disabled=not allow_duplicate_save):
+        if st.button(button_label, disabled=not allow_duplicate_save, type="primary"):
             try:
-                saved_document = save_parsed_document(client, user.id, parsed_document)
+                with st.spinner("Salvando documento e preparando trilha de auditoria..."):
+                    saved_document = save_parsed_document(client, user.id, parsed_document)
             except DocumentPersistenceError as exc:
                 st.error(str(exc))
             else:
@@ -188,6 +196,7 @@ def render_upload_page(config: AppConfig) -> None:
                     )
                 if original_file_saved:
                     st.success("Documento processado, salvo e disponível para download.")
+                    st.toast("Documento salvo com sucesso.")
                     st.rerun()
                 else:
                     st.warning(
@@ -195,21 +204,23 @@ def render_upload_page(config: AppConfig) -> None:
                         "não ficou disponível para download."
                     )
 
-    _render_google_drive_import(config, client, user.id, documents)
-
     st.subheader("Documentos recentes")
     if not documents:
         st.info("Nenhum documento salvo ainda.")
         return
 
     for document in documents:
-        with st.container(border=True):
-            st.write(document.get("filename", "Documento sem nome"))
-            st.caption(
-                f"Status: {document.get('status', 'indefinido')} | "
-                f"Caracteres: {document.get('text_char_count', 0)}"
+        with st.container():
+            document_status, status_label = _document_ai_status(document, chunk_counts)
+            render_document_card(
+                str(document.get("filename") or "Documento sem nome"),
+                [
+                    f"Status: {document.get('status', 'indefinido')}",
+                    f"Caracteres: {document.get('text_char_count', 0)}",
+                ],
+                status=document_status,
+                status_label=status_label,
             )
-            _render_ai_status(document, chunk_counts)
             _render_download_button(client, document)
 
 
@@ -232,7 +243,11 @@ def render_google_drive_oauth_return_without_session(config: AppConfig) -> None:
         "em que você estava usando a plataforma. Para manter a sessão, abra o Synapse "
         "pelo mesmo endereço configurado para o Google Drive."
     )
-    st.link_button("Abrir Synapse no endereço correto", config.google_drive.redirect_uri)
+    st.link_button(
+        "Abrir Synapse no endereço correto",
+        config.google_drive.redirect_uri,
+        type="primary",
+    )
     if st.button("Limpar retorno do Google e entrar novamente"):
         st.query_params.clear()
         st.rerun()
@@ -352,14 +367,15 @@ def _render_google_drive_import(
             step=1,
             key="google-drive-max-files",
         )
-        if st.button("Buscar arquivos no Google Drive"):
+        if st.button("Buscar arquivos no Google Drive", type="primary"):
             try:
                 folder_id = extract_google_drive_folder_id(folder_reference)
-                st.session_state["google_drive_files"] = list_google_drive_folder_files(
-                    credentials,
-                    folder_id,
-                    page_size=int(max_files),
-                )
+                with st.spinner("Buscando arquivos no Google Drive..."):
+                    st.session_state["google_drive_files"] = list_google_drive_folder_files(
+                        credentials,
+                        folder_id,
+                        page_size=int(max_files),
+                    )
             except GoogleDriveConnectorError as exc:
                 st.error(str(exc))
                 return
@@ -379,7 +395,7 @@ def _render_google_drive_import(
             for file, label in zip(drive_files, labels, strict=False)
             if label in selected_labels
         ]
-        if st.button("Importar selecionados", disabled=not selected_files):
+        if st.button("Importar selecionados", disabled=not selected_files, type="primary"):
             _import_google_drive_files(
                 config,
                 client,
@@ -431,6 +447,7 @@ def _import_google_drive_files(
 
     if imported_count:
         st.success(f"{imported_count} arquivo(s) importado(s) do Google Drive.")
+        st.toast("Importação concluída.")
         st.rerun()
     else:
         st.info("Nenhum arquivo novo foi importado do Google Drive.")
@@ -491,7 +508,7 @@ def _render_google_drive_oauth_controls(config: AppConfig) -> None:
         st.warning(str(exc))
         return
 
-    st.link_button("Conectar Google Drive", authorization_url)
+    st.link_button("Conectar Google Drive", authorization_url, type="primary")
 
 
 def _complete_google_drive_oauth_if_needed(config: AppConfig) -> None:
@@ -551,12 +568,19 @@ def _query_param(name: str) -> str:
 
 
 def _render_ai_status(document: dict[str, object], chunk_counts: dict[str, int]) -> None:
+    status, label = _document_ai_status(document, chunk_counts)
+    render_status_badge(status, label=label)
+
+
+def _document_ai_status(
+    document: dict[str, object],
+    chunk_counts: dict[str, int],
+) -> tuple[str, str]:
     document_id = document.get("id")
     chunk_count = chunk_counts.get(document_id, 0) if isinstance(document_id, str) else 0
     if chunk_count > 0:
-        st.caption(f"IA: preparado ({chunk_count} trechos)")
-        return
-    st.caption("IA: pendente de preparação")
+        return "concluído", f"IA concluída ({chunk_count} trechos)"
+    return "pendente", "IA pendente"
 
 
 def _render_download_button(client: object, document: dict[str, object]) -> None:

@@ -38,6 +38,14 @@ def apply_synapse_theme() -> None:
             letter-spacing: 0;
         }
 
+        #MainMenu,
+        footer,
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"] {
+            visibility: hidden !important;
+            display: none !important;
+        }
+
         .stApp,
         [data-testid="stAppViewContainer"] {
             background: var(--synapse-bg);
@@ -186,6 +194,162 @@ def apply_synapse_theme() -> None:
             color: var(--synapse-muted);
             margin: 0.3rem 0 0 0;
             line-height: 1.45;
+        }
+
+        .synapse-kpi-card {
+            background: var(--synapse-surface);
+            border: 1px solid var(--synapse-border);
+            border-radius: var(--synapse-radius);
+            padding: 1rem 1.05rem;
+            min-height: 118px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .synapse-kpi-card strong {
+            display: block;
+            color: var(--synapse-muted);
+            font-size: 0.9rem;
+            font-weight: 750;
+            line-height: 1.25;
+        }
+
+        .synapse-kpi-card span {
+            color: var(--synapse-ink);
+            font-size: 2rem;
+            font-weight: 850;
+            line-height: 1;
+            margin-top: 0.75rem;
+        }
+
+        .synapse-kpi-card small {
+            color: var(--synapse-muted);
+            font-size: 0.78rem;
+            line-height: 1.35;
+            margin-top: 0.7rem;
+        }
+
+        .synapse-kpi-card.is-blue {
+            border-color: #bfdbfe;
+            background: #f8fbff;
+        }
+
+        .synapse-kpi-card.is-green {
+            border-color: #bbf7d0;
+            background: #f7fef9;
+        }
+
+        .synapse-kpi-card.is-amber {
+            border-color: #fde68a;
+            background: #fffdf4;
+        }
+
+        .synapse-kpi-card.is-red {
+            border-color: #fecdd3;
+            background: #fff8f9;
+        }
+
+        .synapse-status-badge {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            border-radius: 999px;
+            padding: 0.24rem 0.62rem;
+            font-size: 0.78rem;
+            font-weight: 800;
+            line-height: 1;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .synapse-status-badge.is-pending {
+            color: #92400e;
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+
+        .synapse-status-badge.is-running {
+            color: #1d4ed8;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .synapse-status-badge.is-done {
+            color: #047857;
+            background: #ecfdf5;
+            border-color: #bbf7d0;
+        }
+
+        .synapse-document-card {
+            background: var(--synapse-surface);
+            border: 1px solid var(--synapse-border);
+            border-radius: var(--synapse-radius);
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .synapse-document-card h3 {
+            margin: 0 0 0.55rem 0;
+            font-size: 1rem !important;
+            line-height: 1.25 !important;
+        }
+
+        .synapse-document-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem 0.6rem;
+            align-items: center;
+            color: var(--synapse-muted);
+            font-size: 0.86rem;
+        }
+
+        .synapse-step-list {
+            margin: 0.25rem 0 0.75rem 0;
+            padding-left: 1.15rem;
+            color: var(--synapse-ink);
+        }
+
+        .synapse-step-list li {
+            margin: 0.35rem 0;
+            line-height: 1.45;
+        }
+
+        .synapse-empty-state {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px dashed #bcd0ea;
+            border-radius: var(--synapse-radius-lg);
+            padding: 1.35rem;
+            margin: 0.85rem 0 1.25rem 0;
+        }
+
+        .synapse-empty-state-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--synapse-blue-soft);
+            color: var(--synapse-brand-dark);
+            font-size: 1.25rem;
+            font-weight: 850;
+            margin-bottom: 0.8rem;
+        }
+
+        .synapse-empty-state strong {
+            display: block;
+            color: var(--synapse-ink);
+            font-size: 1.05rem;
+            font-weight: 850;
+            margin-bottom: 0.35rem;
+        }
+
+        .synapse-empty-state p {
+            color: var(--synapse-muted);
+            line-height: 1.5;
+            margin: 0;
+            max-width: 720px;
         }
 
         [data-testid="stMetric"] {
@@ -376,6 +540,23 @@ def apply_synapse_theme() -> None:
             .synapse-callout {
                 padding: 1rem;
             }
+
+            .synapse-kpi-card {
+                min-height: auto;
+                padding: 0.9rem;
+            }
+
+            .synapse-kpi-card span {
+                font-size: 1.7rem;
+            }
+
+            .synapse-document-card {
+                padding: 0.9rem;
+            }
+
+            .synapse-empty-state {
+                padding: 1rem;
+            }
         }
         </style>
         """,
@@ -409,3 +590,96 @@ def render_callout(title: str, body: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_kpi_card(
+    label: str,
+    value: str | int,
+    detail: str,
+    *,
+    tone: str = "blue",
+) -> None:
+    """Render a compact KPI card with explicit visual hierarchy."""
+    tone_class = _safe_tone(tone)
+    st.markdown(
+        f"""
+        <div class="synapse-kpi-card is-{tone_class}">
+            <strong>{escape(label)}</strong>
+            <span>{escape(str(value))}</span>
+            <small>{escape(detail)}</small>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def status_badge_html(status: str, *, label: str | None = None) -> str:
+    """Return a reusable HTML badge for document and process statuses."""
+    normalized = _normalize_status(status)
+    display_label = label or _status_label(normalized, status)
+    return (
+        f'<span class="synapse-status-badge is-{normalized}">'
+        f"{escape(display_label)}</span>"
+    )
+
+
+def render_status_badge(status: str, *, label: str | None = None) -> None:
+    st.markdown(status_badge_html(status, label=label), unsafe_allow_html=True)
+
+
+def render_document_card(
+    title: str,
+    metadata: list[str],
+    *,
+    status: str,
+    status_label: str | None = None,
+) -> None:
+    metadata_html = "".join(f"<span>{escape(item)}</span>" for item in metadata if item)
+    st.markdown(
+        f"""
+        <div class="synapse-document-card">
+            <h3>{escape(title)}</h3>
+            <div class="synapse-document-meta">
+                {status_badge_html(status, label=status_label)}
+                {metadata_html}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_empty_state(title: str, body: str, *, icon: str = "IA") -> None:
+    """Render a persuasive empty state for corporate workflows."""
+    st.markdown(
+        f"""
+        <div class="synapse-empty-state">
+            <div class="synapse-empty-state-icon">{escape(icon)}</div>
+            <strong>{escape(title)}</strong>
+            <p>{escape(body)}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _safe_tone(tone: str) -> str:
+    return tone if tone in {"blue", "green", "amber", "red"} else "blue"
+
+
+def _normalize_status(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized in {"concluido", "concluído", "done", "prepared", "extracted"}:
+        return "done"
+    if normalized in {"em analise", "em análise", "running", "processing"}:
+        return "running"
+    return "pending"
+
+
+def _status_label(normalized: str, fallback: str) -> str:
+    labels = {
+        "pending": "Pendente",
+        "running": "Em análise",
+        "done": "Concluído",
+    }
+    return labels.get(normalized, fallback)

@@ -15,12 +15,13 @@ from synapse_ai.services.audit_service import (
     AuditRecord,
     audit_records_to_markdown,
     audit_records_to_pdf,
+    audit_records_to_premium_pdf,
     build_audit_records,
     build_audit_summary,
     collect_source_references,
 )
 from synapse_ai.services.chunk_repository import list_document_chunks_by_references
-from synapse_ai.ui.theme import render_page_header
+from synapse_ai.ui.theme import render_empty_state, render_page_header
 
 
 def render_audit_page(config: AppConfig) -> None:
@@ -59,19 +60,31 @@ def render_audit_page(config: AppConfig) -> None:
     records = build_audit_records(analyses, chunk_lookup)
 
     if not records:
-        st.info("Nenhuma análise salva com fontes ainda.")
+        render_empty_state(
+            "A trilha de auditoria ainda está vazia.",
+            "Salve respostas, planos ou relatórios com fontes para montar um pacote de "
+            "evidências verificável e pronto para revisão externa.",
+            icon="EV",
+        )
         return
 
     filtered_records = _filter_records(records)
     _render_audit_summary(filtered_records)
-    download_cols = st.columns(2)
+    download_cols = st.columns(3)
     download_cols[0].download_button(
+        "Baixar relatório premium PDF",
+        data=audit_records_to_premium_pdf(filtered_records),
+        file_name="relatorio_premium_auditoria_synapse.pdf",
+        mime="application/pdf",
+        type="primary",
+    )
+    download_cols[1].download_button(
         "Baixar pacote PDF",
         data=audit_records_to_pdf(filtered_records),
         file_name="pacote_de_evidencias_synapse.pdf",
         mime="application/pdf",
     )
-    download_cols[1].download_button(
+    download_cols[2].download_button(
         "Baixar pacote Markdown",
         data=audit_records_to_markdown(filtered_records),
         file_name="pacote_de_evidencias_synapse.md",

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 
+import altair as alt
 import streamlit as st
 
 from synapse_ai.application.dashboard import IntelligentExecutiveReportCommand
@@ -33,7 +35,12 @@ from synapse_ai.services.report_service import (
     intelligent_report_to_pdf,
 )
 from synapse_ai.ui.dashboard_use_cases import build_intelligent_executive_report_use_case
-from synapse_ai.ui.theme import render_callout, render_page_header
+from synapse_ai.ui.theme import (
+    render_callout,
+    render_empty_state,
+    render_kpi_card,
+    render_page_header,
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +63,12 @@ class DashboardSummary:
     action_items: int
     high_priority_items: int
     items_to_confirm: int
+
+
+@dataclass(frozen=True)
+class DashboardFilters:
+    departments: list[str]
+    risk_level: str
 
 
 def render_dashboard_page(config: AppConfig) -> None:
@@ -101,17 +114,24 @@ def render_dashboard_page(config: AppConfig) -> None:
         config.openai.embedding_model,
     )
     analyses = list_recent_analyses(client, user.id, limit=50)
-    summary = build_dashboard_summary(documents, chunk_counts, analyses)
+    filters = _render_dashboard_filters(analyses)
+    filtered_analyses = _filter_dashboard_analyses(analyses, filters)
+    summary = build_dashboard_summary(documents, chunk_counts, filtered_analyses)
     openai_client = create_openai_client(config)
 
     _render_dashboard_overview(summary)
-    _render_next_best_steps(summary)
-    _render_document_health(documents, chunk_counts)
-    _render_preventive_alerts(analyses)
-    _render_action_intelligence(analyses)
-    _render_intelligence_inventory(summary)
-    _render_historical_patterns(analyses)
-    _render_multi_agent_findings(analyses)
+    _render_dashboard_charts(filtered_analyses)
+    top_left, top_right = st.columns((0.9, 1.1))
+    with top_left:
+        _render_next_best_steps(summary)
+    with top_right:
+        _render_document_health(documents, chunk_counts)
+    _render_preventive_alerts(filtered_analyses)
+    _render_action_intelligence(filtered_analyses)
+    with st.expander("Inventário, padrões históricos e multiagente", expanded=False):
+        _render_intelligence_inventory(summary)
+        _render_historical_patterns(filtered_analyses)
+        _render_multi_agent_findings(filtered_analyses)
     _render_executive_report_downloads(
         client,
         openai_client,
@@ -119,7 +139,7 @@ def render_dashboard_page(config: AppConfig) -> None:
         config,
         documents,
         chunk_counts,
-        analyses,
+        filtered_analyses,
     )
     _render_available_capabilities()
 
@@ -175,6 +195,104 @@ def build_dashboard_summary(
     )
 
 
+def _render_dashboard_filters(analyses: list[dict[str, object]]) -> DashboardFilters:
+    with st.expander("Filtros executivos", expanded=False):
+        st.caption(
+            "Use os filtros para simular leituras por área e nível de risco sem alterar "
+            "a base documental nem os registros salvos."
+        )
+        departments = _available_departments(analyses)
+        filter_cols = st.columns(2)
+        selected_departments = filter_cols[0].multiselect(
+            "Departamento",
+            options=departments,
+            default=departments,
+            help="Segmenta a narrativa do painel por área organizacional.",
+        )
+        risk_level = filter_cols[1].selectbox(
+            "Nível de risco",
+            options=["Todos", "Crítica", "Alta", "Média", "Baixa"],
+            help="Filtra alertas e artefatos vinculados ao nível selecionado.",
+        )
+    return DashboardFilters(
+        departments=selected_departments or departments,
+        risk_level=risk_level,
+    )
+
+
+def _available_departments(analyses: list[dict[str, object]]) -> list[str]:
+    defaults = ["Financeiro", "RH", "Tecnologia", "Operações", "Jurídico", "Geral"]
+    discovered = {_department_for_analysis(analysis) for analysis in analyses}
+    return sorted(set(defaults) | discovered)
+
+
+def _filter_dashboard_analyses(
+    analyses: list[dict[str, object]],
+    filters: DashboardFilters,
+) -> list[dict[str, object]]:
+    filtered = [
+        analysis
+        for analysis in analyses
+        if _department_for_analysis(analysis) in set(filters.departments)
+    ]
+    if filters.risk_level == "Todos":
+        return filtered
+    return [
+        analysis
+        for analysis in filtered
+        if _analysis_has_risk_level(analysis, filters.risk_level)
+    ]
+
+
+def _department_for_analysis(analysis: dict[str, object]) -> str:
+    metadata = analysis.get("metadata")
+    if isinstance(metadata, dict):
+        explicit_department = metadata.get("department") or metadata.get("departamento")
+        if isinstance(explicit_department, str) and explicit_department.strip():
+            return explicit_department.strip()
+
+    searchable_text = " ".join(
+        str(value or "")
+        for value in (
+            analysis.get("title"),
+            analysis.get("question"),
+            analysis.get("answer"),
+            metadata,
+        )
+    ).lower()
+    department_keywords = {
+        "Financeiro": ("financeiro", "orçamento", "budget", "custo", "custos"),
+        "RH": ("rh", "pessoas", "colaborador", "equipe", "treinamento"),
+        "Tecnologia": ("tecnologia", "sistema", "infra", "login", "segurança"),
+        "Operações": ("operação", "operacional", "processo", "entrega", "prazo"),
+        "Jurídico": ("jurídico", "contrato", "compliance", "fornecedor", "assinatura"),
+    }
+    for department, keywords in department_keywords.items():
+        if any(keyword in searchable_text for keyword in keywords):
+            return department
+    return "Geral"
+
+
+def _analysis_has_risk_level(analysis: dict[str, object], risk_level: str) -> bool:
+    metadata = analysis.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    severity_containers = (
+        metadata.get("alerts"),
+        metadata.get("patterns"),
+        metadata.get("items"),
+        metadata.get("issues"),
+    )
+    for container in severity_containers:
+        if isinstance(container, list) and any(
+            isinstance(item, dict)
+            and str(item.get("severity") or item.get("priority") or "") == risk_level
+            for item in container
+        ):
+            return True
+    return False
+
+
 def _render_dashboard_overview(summary: DashboardSummary) -> None:
     st.subheader("Leitura executiva")
     render_callout(
@@ -184,26 +302,34 @@ def _render_dashboard_overview(summary: DashboardSummary) -> None:
     )
 
     metric_cols = st.columns(4)
-    metric_cols[0].metric(
-        "Base pronta",
-        f"{summary.prepared_documents} de {summary.total_documents}",
-        help="Documentos que já possuem trechos semânticos gerados para uso nas perguntas.",
-    )
-    metric_cols[1].metric(
-        "Análises",
-        summary.saved_analyses,
-        help="Perguntas, relatórios e artefatos de inteligência já salvos.",
-    )
-    metric_cols[2].metric(
-        "Riscos",
-        summary.preventive_alerts,
-        help="Alertas preventivos extraídos das análises salvas.",
-    )
-    metric_cols[3].metric(
-        "A confirmar",
-        summary.items_to_confirm,
-        help="Itens de planos de ação que ainda dependem de responsável, prazo ou risco.",
-    )
+    with metric_cols[0]:
+        render_kpi_card(
+            "Base pronta",
+            f"{summary.prepared_documents} de {summary.total_documents}",
+            "Documentos preparados para perguntas com IA.",
+            tone="green" if summary.pending_documents == 0 else "amber",
+        )
+    with metric_cols[1]:
+        render_kpi_card(
+            "Análises",
+            summary.saved_analyses,
+            "Perguntas, relatórios e evidências salvas.",
+            tone="blue",
+        )
+    with metric_cols[2]:
+        render_kpi_card(
+            "Riscos",
+            summary.preventive_alerts,
+            "Alertas preventivos extraídos dos documentos.",
+            tone="red" if summary.critical_preventive_alerts else "amber",
+        )
+    with metric_cols[3]:
+        render_kpi_card(
+            "A confirmar",
+            summary.items_to_confirm,
+            "Itens sem responsável, prazo ou evidência completa.",
+            tone="amber" if summary.items_to_confirm else "green",
+        )
 
     if summary.total_documents:
         st.progress(
@@ -215,13 +341,109 @@ def _render_dashboard_overview(summary: DashboardSummary) -> None:
             ),
         )
     else:
-        st.info("Envie documentos na aba Upload para iniciar a base de conhecimento.")
+        render_empty_state(
+            "Seu ecossistema está silencioso.",
+            "Conecte sua base documental para transformar arquivos dispersos em "
+            "inteligência executiva, evidências e alertas acionáveis.",
+            icon="IA",
+        )
+
+
+def _render_dashboard_charts(analyses: list[dict[str, object]]) -> None:
+    st.subheader("Narrativa de riscos")
+    alerts = _extract_preventive_alerts(
+        [analysis for analysis in analyses if _is_preventive_alert_report(analysis)]
+    )
+    if not alerts:
+        render_empty_state(
+            "Ainda não há riscos mapeados.",
+            "Gere alertas preventivos na aba Análises para visualizar severidade, "
+            "recorrência e evolução do risco organizacional.",
+            icon="!",
+        )
+        return
+
+    chart_cols = st.columns((0.9, 1.1))
+    with chart_cols[0]:
+        _render_alert_severity_donut(alerts)
+    with chart_cols[1]:
+        _render_risk_evolution_chart(analyses)
+
+
+def _render_alert_severity_donut(alerts: list[dict[str, object]]) -> None:
+    st.caption("Distribuição de alertas por nível de severidade")
+    severity_counts = Counter(str(alert.get("severity") or "A confirmar") for alert in alerts)
+    chart_data = [
+        {"Severidade": severity, "Alertas": count}
+        for severity, count in severity_counts.items()
+    ]
+    chart = (
+        alt.Chart(alt.Data(values=chart_data))
+        .mark_arc(innerRadius=58, outerRadius=92, cornerRadius=4)
+        .encode(
+            theta=alt.Theta("Alertas:Q"),
+            color=alt.Color(
+                "Severidade:N",
+                scale=alt.Scale(
+                    domain=["Crítica", "Alta", "Média", "Baixa", "A confirmar"],
+                    range=["#e11d48", "#f97316", "#f59e0b", "#2563eb", "#94a3b8"],
+                ),
+                legend=alt.Legend(orient="bottom"),
+            ),
+            tooltip=["Severidade:N", "Alertas:Q"],
+        )
+        .properties(height=260)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _render_risk_evolution_chart(analyses: list[dict[str, object]]) -> None:
+    st.caption("Evolução de riscos mapeados no tempo")
+    timeline = _risk_evolution_points(analyses)
+    chart = (
+        alt.Chart(alt.Data(values=timeline))
+        .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+        .encode(
+            x=alt.X("Período:N", sort=None, title="Período"),
+            y=alt.Y("Riscos:Q", title="Riscos mapeados"),
+            color=alt.Color("Nível:N", legend=alt.Legend(orient="bottom")),
+            tooltip=["Período:N", "Nível:N", "Riscos:Q"],
+        )
+        .properties(height=260)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _risk_evolution_points(analyses: list[dict[str, object]]) -> list[dict[str, object]]:
+    counter: Counter[tuple[str, str]] = Counter()
+    for analysis in analyses:
+        if not _is_preventive_alert_report(analysis):
+            continue
+        period = _risk_period_label(analysis.get("created_at"))
+        for alert in _extract_preventive_alerts([analysis]):
+            counter[(period, str(alert.get("severity") or "A confirmar"))] += 1
+
+    if not counter:
+        return [{"Período": "Atual", "Nível": "A confirmar", "Riscos": 0}]
+    return [
+        {"Período": period, "Nível": severity, "Riscos": count}
+        for (period, severity), count in sorted(counter.items())
+    ]
+
+
+def _risk_period_label(value: object) -> str:
+    if not isinstance(value, str) or not value:
+        return "Atual"
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%d/%m")
+    except ValueError:
+        return "Atual"
 
 
 def _render_next_best_steps(summary: DashboardSummary) -> None:
     st.subheader("Próximo melhor passo")
-    for index, step in enumerate(_build_next_best_steps(summary), start=1):
-        st.write(f"{index}. {step}")
+    steps = "".join(f"<li>{step}</li>" for step in _build_next_best_steps(summary))
+    st.markdown(f'<ol class="synapse-step-list">{steps}</ol>', unsafe_allow_html=True)
 
 
 def _build_next_best_steps(summary: DashboardSummary) -> list[str]:
@@ -281,7 +503,8 @@ def _render_document_health(
                 "Enviado em": _format_created_at(document.get("created_at")),
             }
         )
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Ver documentos e status de IA", expanded=True):
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
@@ -313,7 +536,8 @@ def _render_action_intelligence(analyses: list[dict[str, object]]) -> None:
         }
         for item in action_items[:10]
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Ver tarefas priorizadas", expanded=True):
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
     high_priority = [item for item in action_items if item.get("priority") == "Alta"]
     to_confirm = [item for item in action_items if _requires_confirmation(item)]
@@ -375,7 +599,8 @@ def _render_preventive_alerts(analyses: list[dict[str, object]]) -> None:
             key=lambda item: severity_order.get(str(item.get("severity", "")), 4),
         )[:10]
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Ver alertas detectados", expanded=True):
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
     critical_alerts = [alert for alert in alerts if alert.get("severity") == "Crítica"]
     high_alerts = [alert for alert in alerts if alert.get("severity") == "Alta"]
@@ -441,7 +666,8 @@ def _render_historical_patterns(analyses: list[dict[str, object]]) -> None:
             key=lambda item: severity_order.get(str(item.get("severity", "")), 3),
         )[:10]
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Ver recorrências detectadas", expanded=False):
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
     high_patterns = [pattern for pattern in patterns if pattern.get("severity") == "Alta"]
     if high_patterns:
@@ -487,7 +713,8 @@ def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
             key=lambda item: severity_order.get(str(item.get("severity", "")), 3),
         )[:10]
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Ver achados por agente", expanded=False):
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 def _render_executive_report_downloads(
@@ -511,7 +738,7 @@ def _render_executive_report_downloads(
     ]
     if not prepared_document_ids:
         st.info("Prepare ao menos um documento para IA antes de gerar o relatório inteligente.")
-    elif st.button("Gerar relatório executivo com IA"):
+    elif st.button("Gerar relatório executivo com IA", type="primary"):
         _generate_intelligent_report_downloads(
             supabase_client,
             openai_client,
@@ -576,6 +803,7 @@ def _generate_intelligent_report_downloads(
     report = output.report
 
     st.success("Relatório executivo com IA gerado.")
+    st.toast("Relatório executivo pronto para download.")
     st.markdown("**Síntese executiva**")
     st.write(report.executive_summary)
     if report.key_findings:
@@ -618,7 +846,7 @@ def _render_available_capabilities() -> None:
 
 
 def _render_analysis_cta(label: str, focus: str, key: str) -> None:
-    if st.button(label, key=key):
+    if st.button(label, key=key, type="primary"):
         st.session_state["analysis_focus"] = focus
         st.session_state["pending_private_page"] = "analysis"
         st.rerun()

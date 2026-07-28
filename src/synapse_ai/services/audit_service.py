@@ -232,6 +232,165 @@ def audit_records_to_pdf(records: list[AuditRecord]) -> bytes:
     return buffer.getvalue()
 
 
+def audit_records_to_premium_pdf(records: list[AuditRecord]) -> bytes:
+    """Build an editorial corporate PDF for executive audit review."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+
+    font_regular, font_bold = register_pdf_fonts()
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=1.6 * cm,
+        rightMargin=1.6 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.4 * cm,
+        title="Relatório premium de auditoria - Synapse AI",
+    )
+    styles = getSampleStyleSheet()
+    cover_label = ParagraphStyle(
+        "PremiumCoverLabel",
+        parent=styles["BodyText"],
+        fontName=font_bold,
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor("#2563eb"),
+        uppercase=True,
+        spaceAfter=14,
+    )
+    cover_title = ParagraphStyle(
+        "PremiumCoverTitle",
+        parent=styles["Title"],
+        fontName=font_bold,
+        fontSize=27,
+        leading=31,
+        textColor=colors.HexColor("#0f172a"),
+        spaceAfter=14,
+    )
+    cover_subtitle = ParagraphStyle(
+        "PremiumCoverSubtitle",
+        parent=styles["BodyText"],
+        fontName=font_regular,
+        fontSize=10.5,
+        leading=15,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=18,
+    )
+    section_title = ParagraphStyle(
+        "PremiumSectionTitle",
+        parent=styles["Heading1"],
+        fontName=font_bold,
+        fontSize=15,
+        leading=18,
+        textColor=colors.HexColor("#111827"),
+        spaceBefore=12,
+        spaceAfter=8,
+    )
+    record_title = ParagraphStyle(
+        "PremiumRecordTitle",
+        parent=styles["Heading2"],
+        fontName=font_bold,
+        fontSize=12.5,
+        leading=15,
+        textColor=colors.HexColor("#172033"),
+        spaceBefore=10,
+        spaceAfter=5,
+    )
+    body_style = ParagraphStyle(
+        "PremiumBody",
+        parent=styles["BodyText"],
+        fontName=font_regular,
+        fontSize=8.9,
+        leading=12,
+        textColor=colors.HexColor("#263043"),
+        spaceAfter=5,
+    )
+    evidence_style = ParagraphStyle(
+        "PremiumEvidence",
+        parent=body_style,
+        fontSize=8,
+        leading=10.5,
+        leftIndent=7,
+        borderColor=colors.HexColor("#c7d2fe"),
+        borderWidth=0.4,
+        borderPadding=6,
+        backColor=colors.HexColor("#f8fbff"),
+        spaceBefore=3,
+        spaceAfter=8,
+    )
+
+    summary = build_audit_summary(records)
+    story: list[Any] = [
+        Spacer(1, 2.4 * cm),
+        Paragraph("SYNAPSE AI | AUDITORIA CORPORATIVA", cover_label),
+        Paragraph("Relatório premium de evidências e rastreabilidade", cover_title),
+        Paragraph(
+            "Documento editorial para revisão executiva, validação de fontes, governança "
+            "e prestação de contas sobre análises assistidas por IA.",
+            cover_subtitle,
+        ),
+        _premium_metric_cards(summary, body_style),
+        Spacer(1, 1.1 * cm),
+        Paragraph(
+            pdf_text(f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}"),
+            body_style,
+        ),
+        PageBreak(),
+        Paragraph("Sumário executivo da auditoria", section_title),
+        Paragraph(
+            "Esta seção consolida a cobertura de evidências, registros auditáveis e pontos "
+            "que exigem validação humana antes de uso executivo.",
+            body_style,
+        ),
+        _audit_metric_table(summary, body_style),
+        Spacer(1, 10),
+        Paragraph("Registros auditáveis", section_title),
+    ]
+    if not records:
+        story.append(Paragraph("Nenhum registro auditável encontrado.", body_style))
+    for index, record in enumerate(records, start=1):
+        story.extend(_audit_record_story(index, record, record_title, body_style, evidence_style))
+    document.build(story)
+    return buffer.getvalue()
+
+
+def _premium_metric_cards(summary: AuditSummary, body_style: Any) -> Any:
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    labels = [
+        ("Registros", summary.records),
+        ("Fontes", summary.sources),
+        ("Documentos", summary.documents),
+        ("Sem evidência", summary.missing_evidence),
+    ]
+    row = [
+        Paragraph(f"<b>{pdf_text(label)}</b><br/>{pdf_text(value)}", body_style)
+        for label, value in labels
+    ]
+    table = Table([row], colWidths=[4.1 * cm, 4.1 * cm, 4.1 * cm, 4.1 * cm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eef6ff")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#bfdbfe")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dbeafe")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ]
+        )
+    )
+    return table
+
+
 def _audit_metric_table(summary: AuditSummary, body_style: Any) -> Any:
     from reportlab.lib.units import cm
 

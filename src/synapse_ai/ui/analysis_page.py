@@ -84,7 +84,7 @@ from synapse_ai.ui.analysis_use_cases import (
     build_preventive_alerts_use_case,
     build_sentiment_analysis_use_case,
 )
-from synapse_ai.ui.theme import render_page_header
+from synapse_ai.ui.theme import render_callout, render_kpi_card, render_page_header
 
 
 def render_analysis_page(config: AppConfig) -> None:
@@ -121,6 +121,11 @@ def render_analysis_page(config: AppConfig) -> None:
     documents = list_user_documents_for_processing(supabase_client, user.id)
 
     st.subheader("Base documental")
+    render_callout(
+        "Escopo antes da pergunta",
+        "A IA consulta apenas os documentos selecionados abaixo. Isso evita misturar "
+        "assuntos diferentes e mantém a resposta mais precisa.",
+    )
     if "semantic_index_success" in st.session_state:
         st.success(str(st.session_state.pop("semantic_index_success")))
     if not documents:
@@ -205,9 +210,27 @@ def render_analysis_page(config: AppConfig) -> None:
         _as_int(document.get("text_char_count")) for document in selected_documents
     )
     metric_cols = st.columns(3)
-    metric_cols[0].metric("Documentos no escopo", f"{len(selected_documents)} de {len(documents)}")
-    metric_cols[1].metric("Caracteres no escopo", str(selected_chars or total_chars))
-    metric_cols[2].metric("Modelo", config.openai.embedding_model)
+    with metric_cols[0]:
+        render_kpi_card(
+            "Documentos no escopo",
+            f"{len(selected_documents)} de {len(documents)}",
+            "Arquivos usados nesta análise.",
+            tone="blue",
+        )
+    with metric_cols[1]:
+        render_kpi_card(
+            "Caracteres no escopo",
+            str(selected_chars or total_chars),
+            "Volume textual disponível para busca.",
+            tone="green",
+        )
+    with metric_cols[2]:
+        render_kpi_card(
+            "Modelo",
+            config.openai.embedding_model,
+            "Embedding usado na base semântica.",
+            tone="amber" if unprepared_documents else "green",
+        )
 
     st.caption(
         "Use esta etapa quando enviar novos documentos ou quiser atualizar a base semântica. "
@@ -224,7 +247,10 @@ def render_analysis_page(config: AppConfig) -> None:
             _render_ai_status(document, chunk_counts)
 
     documents_to_index = selected_documents
-    if st.button(f"Atualizar base semântica do escopo ({len(documents_to_index)} documento(s))"):
+    if st.button(
+        f"Atualizar base semântica do escopo ({len(documents_to_index)} documento(s))",
+        type="primary",
+    ):
         indexed_chunks = _index_documents(
             supabase_client,
             openai_client,
@@ -252,7 +278,7 @@ def render_analysis_page(config: AppConfig) -> None:
         help="Use quando precisar manter uma trilha auditável da pergunta e da resposta.",
     )
 
-    if st.button("Responder com fontes"):
+    if st.button("Responder com fontes", type="primary"):
         _answer_question(
             supabase_client,
             openai_client,
@@ -399,7 +425,7 @@ def _render_intelligence_workflow(
         "Mantém a fotografia estruturada para auditoria e relatórios futuros.",
         "save-intelligence-workflow",
     )
-    if st.button("Gerar inteligência organizacional"):
+    if st.button("Gerar inteligência organizacional", type="primary"):
         _generate_intelligence_snapshot(
             supabase_client,
             openai_client,
@@ -426,7 +452,7 @@ def _render_comparison_workflow(
         "Mantém as divergências encontradas para auditoria futura.",
         "save-comparison-workflow",
     )
-    if st.button("Comparar documentos selecionados"):
+    if st.button("Comparar documentos selecionados", type="primary"):
         _generate_document_comparison(
             supabase_client,
             openai_client,
@@ -453,7 +479,7 @@ def _render_sentiment_workflow(
         "Mantém a leitura de tom organizacional para auditoria futura.",
         "save-sentiment-workflow",
     )
-    if st.button("Analisar sentimentos organizacionais"):
+    if st.button("Analisar sentimentos organizacionais", type="primary"):
         _generate_sentiment_report(
             supabase_client,
             openai_client,
@@ -480,7 +506,7 @@ def _render_preventive_alerts_workflow(
         "Mantém os alertas preventivos para acompanhamento futuro.",
         "save-alerts-workflow",
     )
-    if st.button("Gerar alertas preventivos"):
+    if st.button("Gerar alertas preventivos", type="primary"):
         _generate_preventive_alert_report(
             supabase_client,
             openai_client,
@@ -507,7 +533,7 @@ def _render_historical_patterns_workflow(
         "Mantém a leitura de recorrência para auditoria futura.",
         "save-patterns-workflow",
     )
-    if st.button("Reconhecer padrões históricos"):
+    if st.button("Reconhecer padrões históricos", type="primary"):
         _generate_historical_pattern_report(
             supabase_client,
             openai_client,
@@ -534,7 +560,7 @@ def _render_multi_agent_workflow(
         "Mantém o parecer multiagente para auditoria futura.",
         "save-multi-agent-workflow",
     )
-    if st.button("Executar agentes especializados"):
+    if st.button("Executar agentes especializados", type="primary"):
         _generate_multi_agent_report(
             supabase_client,
             openai_client,
@@ -558,7 +584,7 @@ def _render_action_plan_workflow(
         "Mantém o plano disponível no Dashboard, na Auditoria e nos relatórios.",
         "save-action-plan-workflow",
     )
-    if st.button("Gerar plano de ação com fontes"):
+    if st.button("Gerar plano de ação com fontes", type="primary"):
         _generate_action_plan(
             supabase_client,
             openai_client,
@@ -661,6 +687,7 @@ def _answer_question(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Análise salva no histórico.")
+        st.toast("Análise salva no histórico.")
     else:
         st.info("Análise exibida sem salvar no histórico.")
 
@@ -678,6 +705,7 @@ def _render_use_case_message(result: UseCaseResult[object]) -> None:
         st.error(result.message)
     elif result.severity == ResultSeverity.SUCCESS:
         st.success(result.message)
+        st.toast(result.message)
     else:
         st.info(result.message)
 
@@ -716,6 +744,7 @@ def _generate_action_plan(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Plano de ação salvo no histórico.")
+        st.toast("Plano de ação salvo no histórico.")
     else:
         st.info("Plano exibido sem salvar no histórico.")
 
@@ -754,6 +783,7 @@ def _generate_intelligence_snapshot(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Inteligência organizacional salva no histórico.")
+        st.toast("Inteligência organizacional salva no histórico.")
     else:
         st.info("Inteligência exibida sem salvar no histórico.")
 
@@ -792,6 +822,7 @@ def _generate_document_comparison(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Comparação documental salva no histórico.")
+        st.toast("Comparação documental salva no histórico.")
     else:
         st.info("Comparação exibida sem salvar no histórico.")
 
@@ -830,6 +861,7 @@ def _generate_sentiment_report(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Análise de sentimentos organizacionais salva no histórico.")
+        st.toast("Análise de sentimentos salva no histórico.")
     else:
         st.info("Análise de sentimentos exibida sem salvar no histórico.")
 
@@ -868,6 +900,7 @@ def _generate_preventive_alert_report(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Alertas preventivos salvos no histórico.")
+        st.toast("Alertas preventivos salvos no histórico.")
     else:
         st.info("Alertas preventivos exibidos sem salvar no histórico.")
 
@@ -906,6 +939,7 @@ def _generate_historical_pattern_report(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Padrões históricos salvos no histórico.")
+        st.toast("Padrões históricos salvos no histórico.")
     else:
         st.info("Padrões históricos exibidos sem salvar no histórico.")
 
@@ -944,6 +978,7 @@ def _generate_multi_agent_report(
         st.warning(output.persistence_warning)
     elif output.saved_to_history:
         st.success("Orquestração multiagente salva no histórico.")
+        st.toast("Orquestração multiagente salva no histórico.")
     else:
         st.info("Orquestração multiagente exibida sem salvar no histórico.")
 

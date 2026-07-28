@@ -30,6 +30,10 @@ Regras de comportamento:
 - Não prometa que executou ações que não foram acionadas pelo sistema.
 - Oriente o usuário para as áreas certas: Dashboard, Base documental, Estúdio de IA,
   Insights e Evidências.
+- Quando o usuário pedir ajuda sobre uma tela, explique o objetivo daquela área, o que
+  observar primeiro e qual ação prática faz sentido em seguida.
+- Quando o usuário perguntar o que você faz, apresente capacidades reais do Synapse,
+  sem exagero comercial e sem inventar integrações ou ações indisponíveis.
 - Quando falar de documentos, fontes ou respostas, reforce que o Synapse trabalha com
   rastreabilidade e que decisões críticas devem ser validadas por responsáveis humanos.
 - Não invente dados do usuário. Se não houver contexto suficiente, diga como ele pode
@@ -103,6 +107,40 @@ def render_copilot(config: AppConfig) -> None:
     st.rerun()
 
 
+def render_copilot_sidebar(config: AppConfig, selected_page: str) -> None:
+    st.sidebar.divider()
+    with st.sidebar.expander("Copiloto contextual", expanded=False):
+        st.caption(
+            "Pergunte sem sair da tela atual. O Copiloto usa o contexto da área aberta "
+            "para sugerir o próximo passo."
+        )
+        _render_contextual_quick_actions(config, selected_page)
+
+        recent_messages = _copilot_messages()[-4:]
+        if recent_messages:
+            st.caption("Conversa recente")
+            for message in recent_messages:
+                speaker = "Você" if message.role == "user" else "Copiloto"
+                st.markdown(f"**{speaker}:** {_compact_text(message.content, 180)}")
+
+        with st.form("sidebar_copilot_form", clear_on_submit=True):
+            prompt = st.text_area(
+                "Pergunte ao Copiloto",
+                placeholder="Ex.: O que eu devo fazer nesta tela?",
+                height=92,
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("Enviar ao Copiloto", type="primary")
+        if submitted and prompt.strip():
+            _handle_copilot_prompt(config, prompt.strip())
+            st.rerun()
+
+        _render_pending_copilot_action(prefix="sidebar")
+        if st.button("Abrir central do Copiloto", use_container_width=True):
+            st.session_state["pending_private_page"] = "copilot"
+            st.rerun()
+
+
 def _render_quick_actions(config: AppConfig) -> None:
     st.caption("Atalhos úteis para começar")
     actions = (
@@ -122,6 +160,47 @@ def _render_quick_actions(config: AppConfig) -> None:
                 st.rerun()
 
 
+def _render_contextual_quick_actions(config: AppConfig, selected_page: str) -> None:
+    actions_by_page = {
+        "dashboard": (
+            ("Ler KPIs", "Estou no Dashboard. Como devo interpretar os principais indicadores?"),
+            ("Próximo passo", "Estou no Dashboard. Qual é o próximo melhor passo?"),
+        ),
+        "upload": (
+            (
+                "Ajuda no upload",
+                "Estou na Base documental. O que devo conferir após subir um arquivo?",
+            ),
+            ("Preparar base", "Quando devo preparar a base semântica?"),
+        ),
+        "analysis": (
+            ("Boa pergunta", "Estou no Estúdio de IA. Como faço uma pergunta forte com fontes?"),
+            ("Plano de ação", "Quero transformar esta análise em plano de ação."),
+        ),
+        "intelligence": (
+            ("Priorizar riscos", "Estou em Insights. Como priorizo riscos e alertas?"),
+            ("Virar decisão", "Como transformo estes achados em decisão executiva?"),
+        ),
+        "audit": (
+            ("Rastreabilidade", "Estou em Evidências. O que devo exportar para apresentar?"),
+            ("Pacote final", "Como monto um pacote de evidências convincente?"),
+        ),
+        "copilot": (
+            ("Capacidades", "O que você é capaz de fazer no Synapse?"),
+            ("Roteiro", "Qual roteiro eu devo seguir para usar a plataforma bem?"),
+        ),
+    }
+    actions = actions_by_page.get(selected_page, actions_by_page["copilot"])
+    for index, (label, synthetic_prompt) in enumerate(actions):
+        if st.button(
+            label,
+            use_container_width=True,
+            key=f"sidebar_copilot_quick_{selected_page}_{index}",
+        ):
+            _handle_copilot_prompt(config, synthetic_prompt)
+            st.rerun()
+
+
 def _handle_copilot_prompt(config: AppConfig, prompt: str) -> None:
     _append_copilot_message("user", prompt)
 
@@ -131,6 +210,8 @@ def _handle_copilot_prompt(config: AppConfig, prompt: str) -> None:
             intent.response or "Encontrei a área mais adequada para esse próximo passo."
         )
         _store_pending_copilot_action(intent)
+    elif intent.response:
+        assistant_response = intent.response
     else:
         assistant_response = _generate_copilot_answer(config, _copilot_messages())
 
@@ -139,6 +220,33 @@ def _handle_copilot_prompt(config: AppConfig, prompt: str) -> None:
 
 def route_copilot_intent(prompt: str) -> CopilotIntent:
     clean_prompt = prompt.casefold()
+    if _contains_any(
+        clean_prompt,
+        (
+            "o que você é capaz",
+            "o que voce e capaz",
+            "o que você faz",
+            "o que voce faz",
+            "como você pode ajudar",
+            "como voce pode ajudar",
+            "capacidades",
+        ),
+    ):
+        return CopilotIntent(
+            kind="conversation",
+            response=(
+                "Eu posso ajudar em três camadas do Synapse:\n\n"
+                "1. **Orientação de uso:** explico o que cada tela faz, quando preparar "
+                "a base semântica e qual fluxo seguir para chegar a uma análise confiável.\n\n"
+                "2. **Decisão executiva:** ajudo a priorizar alertas, interpretar riscos, "
+                "organizar evidências e escolher se o próximo passo é pergunta com fontes, "
+                "plano de ação, padrões históricos, multiagente ou pacote de auditoria.\n\n"
+                "3. **Navegação assistida:** quando fizer sentido, sugiro uma ação e mostro "
+                "um botão para abrir a área certa sem tirar você do raciocínio.\n\n"
+                "Eu ainda não executo operações sensíveis sozinho. A ideia é acelerar sua "
+                "análise com rastreabilidade, mantendo decisões críticas sob validação humana."
+            ),
+        )
     if _contains_any(clean_prompt, ("dashboard", "painel", "visão geral", "visao geral")):
         return CopilotIntent(
             kind="navigation",
@@ -286,7 +394,7 @@ def _store_pending_copilot_action(intent: CopilotIntent) -> None:
     }
 
 
-def _render_pending_copilot_action() -> None:
+def _render_pending_copilot_action(*, prefix: str = "main") -> None:
     pending_action = st.session_state.get(COPILOT_PENDING_ACTION_KEY)
     if not isinstance(pending_action, dict):
         return
@@ -300,7 +408,12 @@ def _render_pending_copilot_action() -> None:
 
     st.divider()
     st.caption("Próxima ação sugerida")
-    if st.button(label, type="primary", use_container_width=True):
+    if st.button(
+        label,
+        type="primary",
+        use_container_width=True,
+        key=f"{prefix}_copilot_pending_action",
+    ):
         st.session_state["pending_private_page"] = target_page
         if isinstance(analysis_focus, str) and analysis_focus:
             st.session_state["analysis_focus"] = analysis_focus
@@ -422,6 +535,13 @@ def _extract_response_text(response: object) -> str:
 
 def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
+
+
+def _compact_text(value: str, max_length: int) -> str:
+    clean_value = " ".join(value.split())
+    if len(clean_value) <= max_length:
+        return clean_value
+    return f"{clean_value[: max_length - 1].rstrip()}..."
 
 
 def _current_product_area() -> str:

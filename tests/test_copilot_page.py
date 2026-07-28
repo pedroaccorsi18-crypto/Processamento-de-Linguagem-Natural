@@ -42,6 +42,16 @@ def test_route_copilot_intent_guides_upload_without_immediate_execution() -> Non
     assert "preparação semântica" in intent.response
 
 
+def test_route_copilot_intent_explains_capabilities_without_navigation() -> None:
+    intent = route_copilot_intent("O que você é capaz de fazer?")
+
+    assert intent.kind == "conversation"
+    assert intent.target_page is None
+    assert intent.response is not None
+    assert "Orientação de uso" in intent.response
+    assert "Decisão executiva" in intent.response
+
+
 def test_resolve_openai_api_key_prefers_top_level_secret() -> None:
     api_key = resolve_openai_api_key(
         {

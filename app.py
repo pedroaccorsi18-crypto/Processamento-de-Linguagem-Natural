@@ -6,7 +6,7 @@ from synapse_ai.auth.session import get_current_session_user, initialize_session
 from synapse_ai.config import MissingConfigError, load_config
 from synapse_ai.ui.analysis_page import render_analysis_page
 from synapse_ai.ui.audit_page import render_audit_page
-from synapse_ai.ui.copilot_page import render_copilot
+from synapse_ai.ui.copilot_page import render_copilot, render_copilot_sidebar
 from synapse_ai.ui.dashboard_page import render_dashboard_page
 from synapse_ai.ui.home_page import render_home_page
 from synapse_ai.ui.intelligence_page import render_intelligence_page
@@ -48,6 +48,8 @@ def main() -> None:
         initialize_ui_state(user)
         render_welcome_tour(user)
         selected_page = private_navigation()
+        if selected_page != "copilot":
+            render_copilot_sidebar(config, selected_page)
         if selected_page == "dashboard":
             render_dashboard_page(config)
         elif selected_page == "upload":

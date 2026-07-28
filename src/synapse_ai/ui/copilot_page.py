@@ -521,14 +521,32 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
 
     model = str(st.session_state.get(COPILOT_MODEL_KEY) or config.openai.generation_model)
     client = OpenAI(api_key=api_key)
+    context_snapshot = _load_copilot_context_snapshot(config)
+    current_area = _current_product_area()
+    system_content = (
+        f"{COPILOT_SYSTEM_PROMPT}\n\n"
+        "Mapa do produto:\n"
+        "- Dashboard: visão executiva, KPIs, alertas e indicadores consolidados.\n"
+        "- Base documental: upload, importação, documentos recentes e disponibilidade "
+        "dos arquivos.\n"
+        "- Estúdio de IA: perguntas com fontes, plano de ação, padrões históricos e multiagente.\n"
+        "- Insights: análise de riscos, alertas preventivos e achados organizacionais.\n"
+        "- Evidências: auditoria, fontes salvas, registros e pacotes exportáveis.\n\n"
+        f"Área atual do usuário: {current_area}.\n\n"
+        "Contexto disponível do usuário:\n"
+        f"{context_snapshot or 'Nenhum contexto documental adicional foi carregado.'}"
+    )
+    chat_messages = [
+        {"role": "system", "content": system_content},
+        *[
+            {"role": message.role, "content": message.content}
+            for message in messages[-12:]
+        ],
+    ]
     try:
-        response = client.responses.create(
+        response = client.chat.completions.create(
             model=model,
-            instructions=COPILOT_SYSTEM_PROMPT,
-            input=_build_copilot_input(
-                messages,
-                context_snapshot=_load_copilot_context_snapshot(config),
-            ),
+            messages=chat_messages,
         )
     except Exception:  # noqa: BLE001
         return (
@@ -536,10 +554,10 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
             "lateral para seguir pelo fluxo principal."
         )
 
-    answer = _extract_response_text(response)
+    answer = response.choices[0].message.content if response.choices else ""
     if not answer:
         return "A IA não retornou uma resposta útil agora. Tente reformular a pergunta."
-    return answer
+    return answer.strip()
 
 
 def _answer_document_excerpt_request(config: AppConfig, prompt: str) -> str:
@@ -781,35 +799,6 @@ def resolve_openai_api_key(secrets: Mapping[str, Any], *, fallback: str = "") ->
     return fallback.strip()
 
 
-def _build_copilot_input(
-    messages: list[CopilotMessage],
-    *,
-    context_snapshot: str = "",
-) -> str:
-    recent_messages = messages[-12:]
-    transcript = "\n".join(
-        f"{'Usuário' if message.role == 'user' else 'Copiloto'}: {message.content}"
-        for message in recent_messages
-    )
-    current_area = _current_product_area()
-    return (
-        "Mapa do produto:\n"
-        "- Dashboard: visão executiva, KPIs, alertas e indicadores consolidados.\n"
-        "- Base documental: upload, importação, documentos recentes e disponibilidade "
-        "dos arquivos.\n"
-        "- Estúdio de IA: perguntas com fontes, plano de ação, padrões históricos e multiagente.\n"
-        "- Insights: análise de riscos, alertas preventivos e achados organizacionais.\n"
-        "- Evidências: auditoria, fontes salvas, registros e pacotes exportáveis.\n\n"
-        f"Área atual do usuário: {current_area}.\n\n"
-        "Contexto disponível do usuário:\n"
-        f"{context_snapshot or 'Nenhum contexto documental adicional foi carregado.'}\n\n"
-        "Histórico recente da conversa no Synapse AI:\n"
-        f"{transcript}\n\n"
-        "Responda à última mensagem do usuário de forma útil e objetiva. "
-        "Quando fizer sentido, indique o próximo passo dentro do produto."
-    )
-
-
 def _copilot_messages() -> list[CopilotMessage]:
     raw_messages = st.session_state.setdefault(COPILOT_MESSAGES_KEY, [])
     if not isinstance(raw_messages, list):
@@ -834,27 +823,6 @@ def _append_copilot_message(role: Literal["user", "assistant"], content: str) ->
         st.session_state[COPILOT_MESSAGES_KEY] = raw_messages
     raw_messages.append({"role": role, "content": content})
     del raw_messages[:-20]
-
-
-def _extract_response_text(response: object) -> str:
-    output_text = getattr(response, "output_text", None)
-    if isinstance(output_text, str) and output_text.strip():
-        return output_text.strip()
-
-    output = getattr(response, "output", None)
-    if not isinstance(output, list):
-        return ""
-
-    chunks: list[str] = []
-    for item in output:
-        content = getattr(item, "content", None)
-        if not isinstance(content, list):
-            continue
-        for content_item in content:
-            text = getattr(content_item, "text", None)
-            if isinstance(text, str):
-                chunks.append(text)
-    return "\n".join(chunks).strip()
 
 
 def _contains_any(value: str, needles: tuple[str, ...]) -> bool:

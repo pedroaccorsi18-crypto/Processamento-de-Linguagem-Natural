@@ -114,27 +114,16 @@ def render_dashboard_page(config: AppConfig) -> None:
         config.openai.embedding_model,
     )
     analyses = list_recent_analyses(client, user.id, limit=50)
-    filters = _render_dashboard_filters(analyses)
-    filtered_analyses = _filter_dashboard_analyses(analyses, filters)
-    summary = build_dashboard_summary(documents, chunk_counts, filtered_analyses)
+    summary = build_dashboard_summary(documents, chunk_counts, analyses)
     openai_client = create_openai_client(config)
 
     _render_dashboard_overview(summary)
-    _render_dashboard_charts(filtered_analyses)
     top_left, top_right = st.columns((0.9, 1.1))
     with top_left:
         _render_next_best_steps(summary)
     with top_right:
         _render_document_health(documents, chunk_counts)
-    _render_preventive_alerts(filtered_analyses)
-    _render_action_intelligence(filtered_analyses)
-    st.divider()
-    _render_intelligence_inventory(summary)
-    secondary_left, secondary_right = st.columns(2)
-    with secondary_left:
-        _render_historical_patterns(filtered_analyses)
-    with secondary_right:
-        _render_multi_agent_findings(filtered_analyses)
+    _render_dashboard_attention(summary, analyses)
     _render_executive_report_downloads(
         client,
         openai_client,
@@ -142,9 +131,8 @@ def render_dashboard_page(config: AppConfig) -> None:
         config,
         documents,
         chunk_counts,
-        filtered_analyses,
+        analyses,
     )
-    _render_available_capabilities()
 
 
 def build_dashboard_summary(
@@ -447,6 +435,64 @@ def _render_next_best_steps(summary: DashboardSummary) -> None:
     st.subheader("Próximo melhor passo")
     steps = "".join(f"<li>{step}</li>" for step in _build_next_best_steps(summary))
     st.markdown(f'<ol class="synapse-step-list">{steps}</ol>', unsafe_allow_html=True)
+
+
+def _render_dashboard_attention(
+    summary: DashboardSummary,
+    analyses: list[dict[str, object]],
+) -> None:
+    st.subheader("Atenção executiva")
+    critical_alerts = [
+        alert
+        for alert in _extract_preventive_alerts(
+            [analysis for analysis in analyses if _is_preventive_alert_report(analysis)]
+        )
+        if alert.get("severity") == "Crítica"
+    ]
+    high_priority_items = [
+        item for item in _extract_action_items(analyses) if item.get("priority") == "Alta"
+    ]
+
+    if not critical_alerts and not high_priority_items and summary.saved_analyses:
+        st.success(
+            "Nenhum item crítico consolidado no momento. Use a aba Inteligência para explorar "
+            "alertas, padrões e achados por perspectiva."
+        )
+        if st.button("Abrir Inteligência", key="cta-dashboard-intelligence", type="primary"):
+            st.session_state["pending_private_page"] = "intelligence"
+            st.rerun()
+        return
+
+    if not summary.saved_analyses:
+        render_empty_state(
+            "Ainda não há inteligência consolidada.",
+            "Faça perguntas ou gere análises no Estúdio de IA para alimentar alertas, padrões, "
+            "planos de ação e relatórios executivos.",
+            icon="IA",
+        )
+        if st.button("Ir para Análises", key="cta-dashboard-analysis-empty", type="primary"):
+            st.session_state["pending_private_page"] = "analysis"
+            st.rerun()
+        return
+
+    attention_cols = st.columns(2)
+    with attention_cols[0]:
+        render_kpi_card(
+            "Alertas críticos",
+            len(critical_alerts),
+            "Riscos que exigem validação imediata.",
+            tone="red" if critical_alerts else "green",
+        )
+    with attention_cols[1]:
+        render_kpi_card(
+            "Prioridade alta",
+            len(high_priority_items),
+            "Tarefas e decisões que precisam de acompanhamento.",
+            tone="amber" if high_priority_items else "green",
+        )
+    if st.button("Investigar na aba Inteligência", key="cta-dashboard-intelligence-detail"):
+        st.session_state["pending_private_page"] = "intelligence"
+        st.rerun()
 
 
 def _build_next_best_steps(summary: DashboardSummary) -> list[str]:

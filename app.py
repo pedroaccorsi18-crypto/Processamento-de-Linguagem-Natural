@@ -8,6 +8,7 @@ from synapse_ai.ui.analysis_page import render_analysis_page
 from synapse_ai.ui.audit_page import render_audit_page
 from synapse_ai.ui.dashboard_page import render_dashboard_page
 from synapse_ai.ui.home_page import render_home_page
+from synapse_ai.ui.intelligence_page import render_intelligence_page
 from synapse_ai.ui.login_page import render_login_page
 from synapse_ai.ui.navigation import private_navigation, public_navigation
 from synapse_ai.ui.register_page import render_register_page
@@ -47,6 +48,8 @@ def main() -> None:
             render_upload_page(config)
         elif selected_page == "analysis":
             render_analysis_page(config)
+        elif selected_page == "intelligence":
+            render_intelligence_page(config)
         elif selected_page == "audit":
             render_audit_page(config)
         return

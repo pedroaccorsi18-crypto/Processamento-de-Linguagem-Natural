@@ -7,7 +7,19 @@ from typing import Any, Literal
 import streamlit as st
 from openai import OpenAI
 
+from synapse_ai.auth.session import (
+    get_access_token,
+    get_current_session_user,
+    get_refresh_token,
+    update_auth_tokens,
+)
+from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
+from synapse_ai.ui.cache import (
+    cached_recent_analyses,
+    cached_user_documents_for_processing,
+)
+from synapse_ai.ui.state import current_tenant_id
 from synapse_ai.ui.theme import render_callout, render_page_header
 
 CopilotIntentKind = Literal["conversation", "navigation"]
@@ -158,8 +170,8 @@ def render_copilot_sidebar(config: AppConfig, selected_page: str) -> None:
 
         latest_answer = _latest_assistant_message()
         if latest_answer:
-            with st.expander("Resposta mais recente", expanded=False):
-                st.markdown(latest_answer)
+            st.caption("Resposta mais recente")
+            st.markdown(latest_answer)
 
         with st.form("sidebar_copilot_form", clear_on_submit=True):
             prompt = st.text_area(
@@ -281,8 +293,9 @@ def _render_contextual_quick_action(
 def _handle_copilot_prompt(config: AppConfig, prompt: str) -> None:
     _append_copilot_message("user", prompt)
 
-    intent = route_copilot_intent(prompt)
-    if intent.kind == "navigation":
+    if _is_document_excerpt_request(prompt):
+        assistant_response = _answer_document_excerpt_request(config, prompt)
+    elif (intent := route_copilot_intent(prompt)).kind == "navigation":
         assistant_response = (
             intent.response or "Encontrei a área mais adequada para esse próximo passo."
         )
@@ -512,7 +525,10 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
         response = client.responses.create(
             model=model,
             instructions=COPILOT_SYSTEM_PROMPT,
-            input=_build_copilot_input(messages),
+            input=_build_copilot_input(
+                messages,
+                context_snapshot=_load_copilot_context_snapshot(config),
+            ),
         )
     except Exception:  # noqa: BLE001
         return (
@@ -524,6 +540,231 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
     if not answer:
         return "A IA não retornou uma resposta útil agora. Tente reformular a pergunta."
     return answer
+
+
+def _answer_document_excerpt_request(config: AppConfig, prompt: str) -> str:
+    documents = _load_user_processable_documents(config)
+    return _build_document_excerpt_answer(documents, prompt)
+
+
+def _load_user_processable_documents(config: AppConfig) -> list[dict[str, object]]:
+    user = get_current_session_user()
+    access_token = get_access_token()
+    if user is None or access_token is None:
+        return []
+
+    try:
+        connection = create_authenticated_supabase_connection(
+            config,
+            access_token,
+            get_refresh_token(),
+        )
+        update_auth_tokens(connection.access_token, connection.refresh_token)
+        tenant_id = current_tenant_id(user)
+        return cached_user_documents_for_processing(connection.client, tenant_id, user.id)
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _load_copilot_context_snapshot(config: AppConfig) -> str:
+    documents = _load_user_processable_documents(config)
+    user = get_current_session_user()
+    access_token = get_access_token()
+    analyses: list[dict[str, object]] = []
+    if user is not None and access_token is not None:
+        try:
+            connection = create_authenticated_supabase_connection(
+                config,
+                access_token,
+                get_refresh_token(),
+            )
+            update_auth_tokens(connection.access_token, connection.refresh_token)
+            tenant_id = current_tenant_id(user)
+            analyses = cached_recent_analyses(connection.client, tenant_id, user.id, 8)
+        except Exception:  # noqa: BLE001
+            analyses = []
+    return _build_context_snapshot(documents, analyses)
+
+
+def _build_context_snapshot(
+    documents: list[dict[str, object]],
+    analyses: list[dict[str, object]],
+) -> str:
+    sections: list[str] = []
+    if documents:
+        document_lines = []
+        for document in documents[:5]:
+            filename = str(document.get("filename") or "Documento sem nome")
+            char_count = document.get("text_char_count") or 0
+            document_lines.append(f"- {filename} ({char_count} caracteres extraídos)")
+        sections.append("Documentos recentes:\n" + "\n".join(document_lines))
+    else:
+        sections.append("Documentos recentes: nenhum documento extraído encontrado.")
+
+    if analyses:
+        analysis_lines = []
+        for analysis in analyses[:5]:
+            title = str(
+                analysis.get("title")
+                or analysis.get("question")
+                or "Análise salva sem título"
+            )
+            analysis_lines.append(f"- {title}")
+        sections.append("Análises recentes:\n" + "\n".join(analysis_lines))
+    else:
+        sections.append("Análises recentes: nenhuma análise salva encontrada.")
+    return "\n\n".join(sections)
+
+
+def _build_document_excerpt_answer(
+    documents: list[dict[str, object]],
+    prompt: str,
+) -> str:
+    if not documents:
+        return (
+            "Não encontrei documentos com texto extraído na sua conta agora. Se você acabou "
+            "de enviar um arquivo, confira na Base documental se ele aparece como extraído. "
+            "Para análises com fonte, o próximo passo é preparar a base semântica no Estúdio de IA."
+        )
+
+    excerpts = _select_document_excerpts(documents, prompt, max_excerpts=5)
+    if not excerpts:
+        return (
+            "Encontrei documentos enviados, mas não localizei texto suficiente para elencar "
+            "trechos úteis. Confira se a extração do arquivo foi concluída na Base documental."
+        )
+
+    lines = [
+        "Separei os principais trechos disponíveis nos documentos extraídos da sua conta:",
+        "",
+    ]
+    for index, excerpt in enumerate(excerpts, start=1):
+        lines.extend(
+            [
+                f"**{index}. {excerpt['filename']}**",
+                f"> {excerpt['text']}",
+                "",
+            ]
+        )
+    lines.append(
+        "Para uma resposta analítica com citações e fontes, use o Estúdio de IA com esses "
+        "documentos no escopo. O Copiloto aqui ajuda a orientar e antecipar os pontos principais."
+    )
+    return "\n".join(lines).strip()
+
+
+def _select_document_excerpts(
+    documents: list[dict[str, object]],
+    prompt: str,
+    *,
+    max_excerpts: int,
+) -> list[dict[str, str]]:
+    query_terms = _significant_terms(prompt)
+    candidates: list[tuple[int, int, dict[str, str]]] = []
+    for document_order, document in enumerate(documents):
+        filename = str(document.get("filename") or "Documento sem nome")
+        text = document.get("extracted_text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        for paragraph_order, paragraph in enumerate(_candidate_paragraphs(text)):
+            score = _excerpt_score(paragraph, query_terms)
+            if score <= 0 and query_terms:
+                continue
+            candidates.append(
+                (
+                    score,
+                    -(document_order * 1000 + paragraph_order),
+                    {
+                        "filename": filename,
+                        "text": _trim_excerpt(paragraph),
+                    },
+                )
+            )
+
+    if not candidates and not query_terms:
+        for document in documents:
+            filename = str(document.get("filename") or "Documento sem nome")
+            text = document.get("extracted_text")
+            if isinstance(text, str) and text.strip():
+                return [{"filename": filename, "text": _trim_excerpt(text)}]
+
+    ranked = sorted(candidates, key=lambda item: (item[0], item[1]), reverse=True)
+    excerpts: list[dict[str, str]] = []
+    seen_texts: set[str] = set()
+    for _, _, excerpt in ranked:
+        fingerprint = excerpt["text"][:120].casefold()
+        if fingerprint in seen_texts:
+            continue
+        seen_texts.add(fingerprint)
+        excerpts.append(excerpt)
+        if len(excerpts) >= max_excerpts:
+            break
+    return excerpts
+
+
+def _candidate_paragraphs(text: str) -> list[str]:
+    normalized_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not normalized_lines:
+        return []
+    paragraphs: list[str] = []
+    buffer: list[str] = []
+    for line in normalized_lines:
+        buffer.append(line)
+        if len(" ".join(buffer)) >= 260:
+            paragraphs.append(" ".join(buffer))
+            buffer = []
+    if buffer:
+        paragraphs.append(" ".join(buffer))
+    return [paragraph for paragraph in paragraphs if len(paragraph) >= 80]
+
+
+def _significant_terms(prompt: str) -> set[str]:
+    stopwords = {
+        "consegue",
+        "principais",
+        "trechos",
+        "parte",
+        "partes",
+        "documento",
+        "documentos",
+        "enviei",
+        "enviado",
+        "arquivo",
+        "arquivos",
+        "sobre",
+        "para",
+        "com",
+        "que",
+        "uma",
+        "dos",
+        "das",
+        "me",
+        "o",
+        "a",
+    }
+    terms = {
+        term.strip(".,;:!?()[]{}\"'").casefold()
+        for term in prompt.split()
+        if len(term.strip(".,;:!?()[]{}\"'")) >= 4
+    }
+    return {term for term in terms if term and term not in stopwords}
+
+
+def _excerpt_score(paragraph: str, query_terms: set[str]) -> int:
+    clean_paragraph = paragraph.casefold()
+    score = sum(3 for term in query_terms if term in clean_paragraph)
+    if any(marker in clean_paragraph for marker in ("decidiu", "risco", "prazo", "responsável")):
+        score += 2
+    if len(paragraph) >= 180:
+        score += 1
+    return score
+
+
+def _trim_excerpt(text: str, limit: int = 520) -> str:
+    clean_text = " ".join(text.split())
+    if len(clean_text) <= limit:
+        return clean_text
+    return f"{clean_text[: limit - 1].rstrip()}..."
 
 
 def resolve_openai_api_key(secrets: Mapping[str, Any], *, fallback: str = "") -> str:
@@ -540,7 +781,11 @@ def resolve_openai_api_key(secrets: Mapping[str, Any], *, fallback: str = "") ->
     return fallback.strip()
 
 
-def _build_copilot_input(messages: list[CopilotMessage]) -> str:
+def _build_copilot_input(
+    messages: list[CopilotMessage],
+    *,
+    context_snapshot: str = "",
+) -> str:
     recent_messages = messages[-12:]
     transcript = "\n".join(
         f"{'Usuário' if message.role == 'user' else 'Copiloto'}: {message.content}"
@@ -556,6 +801,8 @@ def _build_copilot_input(messages: list[CopilotMessage]) -> str:
         "- Insights: análise de riscos, alertas preventivos e achados organizacionais.\n"
         "- Evidências: auditoria, fontes salvas, registros e pacotes exportáveis.\n\n"
         f"Área atual do usuário: {current_area}.\n\n"
+        "Contexto disponível do usuário:\n"
+        f"{context_snapshot or 'Nenhum contexto documental adicional foi carregado.'}\n\n"
         "Histórico recente da conversa no Synapse AI:\n"
         f"{transcript}\n\n"
         "Responda à última mensagem do usuário de forma útil e objetiva. "
@@ -612,6 +859,24 @@ def _extract_response_text(response: object) -> str:
 
 def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
     return any(needle in value for needle in needles)
+
+
+def _is_document_excerpt_request(prompt: str) -> bool:
+    clean_prompt = prompt.casefold()
+    return _contains_any(
+        clean_prompt,
+        (
+            "principais trechos",
+            "trechos do que enviei",
+            "trechos que enviei",
+            "o que enviei",
+            "o arquivo que enviei",
+            "documento que enviei",
+            "principais pontos do documento",
+            "principais partes",
+            "resuma o que enviei",
+        ),
+    )
 
 
 def _latest_assistant_message() -> str:

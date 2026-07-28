@@ -6,6 +6,7 @@ from synapse_ai.auth.auth import login_user
 from synapse_ai.auth.session import set_auth_session
 from synapse_ai.clients.supabase_client import create_supabase_client
 from synapse_ai.config import AppConfig
+from synapse_ai.ui.cache import invalidate_session_resources
 from synapse_ai.ui.theme import render_page_header
 from synapse_ai.utils.validation import is_valid_email
 
@@ -43,6 +44,7 @@ def render_login_page(config: AppConfig) -> None:
         st.error(result.message)
         return
 
+    invalidate_session_resources()
     set_auth_session(result.user, result.access_token, result.refresh_token)
     st.success(result.message)
     st.rerun()

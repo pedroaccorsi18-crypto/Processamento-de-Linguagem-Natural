@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import streamlit as st
-from openai import OpenAI
 
 from synapse_ai.auth.session import (
     get_access_token,
@@ -13,12 +12,13 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.ui.cache import (
     cached_recent_analyses,
     cached_user_documents,
     cached_user_documents_for_processing,
+    get_cached_openai_client,
+    get_session_supabase_connection,
 )
 from synapse_ai.ui.state import current_tenant_id
 from synapse_ai.ui.theme import render_callout, render_page_header
@@ -526,7 +526,7 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
         )
 
     model = str(st.session_state.get(COPILOT_MODEL_KEY) or config.openai.generation_model)
-    client = OpenAI(api_key=api_key)
+    client = get_cached_openai_client(api_key)
     context_snapshot = _load_copilot_context_snapshot(config)
     current_area = _current_product_area()
     system_content = (
@@ -578,7 +578,7 @@ def _load_user_processable_documents(config: AppConfig) -> list[dict[str, object
         return []
 
     try:
-        connection = create_authenticated_supabase_connection(
+        connection = get_session_supabase_connection(
             config,
             access_token,
             get_refresh_token(),
@@ -597,7 +597,7 @@ def _load_copilot_context_snapshot(config: AppConfig) -> str:
     analyses: list[dict[str, object]] = []
     if user is not None and access_token is not None:
         try:
-            connection = create_authenticated_supabase_connection(
+            connection = get_session_supabase_connection(
                 config,
                 access_token,
                 get_refresh_token(),

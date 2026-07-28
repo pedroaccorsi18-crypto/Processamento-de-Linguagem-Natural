@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from time import monotonic
 from typing import Any
 
 import streamlit as st
 
+from synapse_ai.clients.supabase_client import (
+    AuthenticatedSupabaseConnection,
+    create_authenticated_supabase_connection,
+)
 from synapse_ai.config import AppConfig
+
+AUTHENTICATED_SUPABASE_CONNECTION_KEY = "synapse_authenticated_supabase_connection"
+AUTHENTICATED_SUPABASE_CONNECTION_TTL_SECONDS = 600
 
 
 @st.cache_resource(show_spinner=False)
@@ -21,6 +30,54 @@ def get_openai_client(config: AppConfig) -> Any:
         return get_cached_openai_client(config.openai.api_key)
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError("Não foi possível inicializar o cliente OpenAI.") from exc
+
+
+@dataclass
+class LazyOpenAIClient:
+    """Initialize the OpenAI client only when an AI action actually runs."""
+
+    config: AppConfig
+    _client: Any = field(default=None, init=False, repr=False)
+
+    def __getattr__(self, name: str) -> Any:
+        if self._client is None:
+            self._client = get_openai_client(self.config)
+        return getattr(self._client, name)
+
+
+def lazy_openai_client(config: AppConfig) -> Any:
+    """Return a lazy proxy that preserves the public OpenAI client contract."""
+    return LazyOpenAIClient(config)
+
+
+def get_session_supabase_connection(
+    config: AppConfig,
+    access_token: str,
+    refresh_token: str | None,
+) -> AuthenticatedSupabaseConnection:
+    """Reuse an authenticated Supabase client inside the current Streamlit session."""
+    cache_identity = _supabase_connection_identity(config, access_token, refresh_token)
+    cached_entry = st.session_state.get(AUTHENTICATED_SUPABASE_CONNECTION_KEY)
+    if (
+        isinstance(cached_entry, dict)
+        and cached_entry.get("identity") == cache_identity
+        and _is_fresh_session_resource(cached_entry.get("created_at"))
+    ):
+        connection = cached_entry.get("connection")
+        if isinstance(connection, AuthenticatedSupabaseConnection):
+            return connection
+
+    connection = create_authenticated_supabase_connection(config, access_token, refresh_token)
+    st.session_state[AUTHENTICATED_SUPABASE_CONNECTION_KEY] = {
+        "identity": _supabase_connection_identity(
+            config,
+            connection.access_token,
+            connection.refresh_token,
+        ),
+        "connection": connection,
+        "created_at": monotonic(),
+    }
+    return connection
 
 
 @st.cache_data(ttl=45, show_spinner=False)
@@ -103,6 +160,31 @@ def invalidate_data_cache() -> None:
     st.cache_data.clear()
 
 
+def invalidate_session_resources() -> None:
+    """Clear session-scoped clients after auth changes."""
+    st.session_state.pop(AUTHENTICATED_SUPABASE_CONNECTION_KEY, None)
+
+
 def _assert_cache_scope(tenant_id: str, user_id: str) -> None:
     if not tenant_id or not user_id:
         raise RuntimeError("Escopo de usuário inválido para consulta em cache.")
+
+
+def _is_fresh_session_resource(created_at: object) -> bool:
+    return (
+        isinstance(created_at, (int, float))
+        and monotonic() - float(created_at) <= AUTHENTICATED_SUPABASE_CONNECTION_TTL_SECONDS
+    )
+
+
+def _supabase_connection_identity(
+    config: AppConfig,
+    access_token: str,
+    refresh_token: str | None,
+) -> tuple[str, str, str, str]:
+    return (
+        config.supabase.url,
+        config.supabase.publishable_key,
+        access_token,
+        refresh_token or "",
+    )

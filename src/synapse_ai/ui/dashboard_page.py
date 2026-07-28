@@ -15,7 +15,6 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.services.analysis_service import (
     describe_planned_analysis_capabilities,
@@ -31,7 +30,8 @@ from synapse_ai.ui.cache import (
     cached_document_chunk_counts,
     cached_recent_analyses,
     cached_user_documents,
-    get_openai_client,
+    get_session_supabase_connection,
+    lazy_openai_client,
 )
 from synapse_ai.ui.dashboard_use_cases import build_intelligent_executive_report_use_case
 from synapse_ai.ui.state import current_tenant_id
@@ -89,7 +89,7 @@ def render_dashboard_page(config: AppConfig) -> None:
         return
 
     try:
-        connection = create_authenticated_supabase_connection(
+        connection = get_session_supabase_connection(
             config,
             access_token,
             get_refresh_token(),
@@ -111,14 +111,12 @@ def render_dashboard_page(config: AppConfig) -> None:
     )
     analyses = cached_recent_analyses(client, tenant_id, user.id, 50)
     summary = build_dashboard_summary(documents, chunk_counts, analyses)
-    openai_client = get_openai_client(config)
 
     _render_dashboard_overview(summary)
     _render_dashboard_attention(summary, analyses)
     _render_next_best_steps(summary)
     _render_executive_report_downloads(
         client,
-        openai_client,
         user.id,
         config,
         documents,
@@ -819,7 +817,6 @@ def _render_multi_agent_findings(analyses: list[dict[str, object]]) -> None:
 
 def _render_executive_report_downloads(
     supabase_client: object,
-    openai_client: object,
     user_id: str,
     config: AppConfig,
     documents: list[dict[str, object]],
@@ -841,7 +838,7 @@ def _render_executive_report_downloads(
     elif st.button("Gerar relatório executivo com IA", type="primary"):
         _generate_intelligent_report_downloads(
             supabase_client,
-            openai_client,
+            lazy_openai_client(config),
             user_id,
             config,
             documents,
@@ -854,20 +851,34 @@ def _render_executive_report_downloads(
             "Este export é um resumo operacional do Dashboard. Para análise executiva, use o "
             "botão de IA acima."
         )
-        report = build_executive_report(documents, chunk_counts, analyses)
+        markdown_report, pdf_report = _cached_executive_report_exports(
+            documents,
+            chunk_counts,
+            analyses,
+        )
         download_cols = st.columns(2)
         download_cols[0].download_button(
             "Exportar painel Markdown",
-            data=executive_report_to_markdown(report),
+            data=markdown_report,
             file_name="painel_executivo_synapse.md",
             mime="text/markdown",
         )
         download_cols[1].download_button(
             "Exportar painel PDF",
-            data=executive_report_to_pdf(report),
+            data=pdf_report,
             file_name="painel_executivo_synapse.pdf",
             mime="application/pdf",
         )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_executive_report_exports(
+    documents: list[dict[str, object]],
+    chunk_counts: dict[str, int],
+    analyses: list[dict[str, object]],
+) -> tuple[str, bytes]:
+    report = build_executive_report(documents, chunk_counts, analyses)
+    return executive_report_to_markdown(report), executive_report_to_pdf(report)
 
 
 def _generate_intelligent_report_downloads(

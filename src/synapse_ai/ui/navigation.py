@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from synapse_ai.auth.session import clear_session, get_current_session_user
+from synapse_ai.ui.cache import invalidate_session_resources
 
 
 def public_navigation() -> str:
@@ -24,6 +25,7 @@ def private_navigation() -> str:
     if user is not None:
         st.sidebar.caption(f"Conta: {user.email}")
         if st.sidebar.button("Sair", key="sidebar-logout"):
+            invalidate_session_resources()
             clear_session()
             st.rerun()
 

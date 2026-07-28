@@ -8,12 +8,12 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.ui.cache import (
     cached_document_chunk_counts,
     cached_recent_analyses,
     cached_user_documents,
+    get_session_supabase_connection,
 )
 from synapse_ai.ui.dashboard_page import (
     DashboardSummary,
@@ -52,7 +52,7 @@ def render_intelligence_page(config: AppConfig) -> None:
         return
 
     try:
-        connection = create_authenticated_supabase_connection(
+        connection = get_session_supabase_connection(
             config,
             access_token,
             get_refresh_token(),

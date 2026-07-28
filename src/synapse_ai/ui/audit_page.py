@@ -8,7 +8,6 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.services.audit_service import (
     AuditRecord,
@@ -19,7 +18,11 @@ from synapse_ai.services.audit_service import (
     build_audit_summary,
     collect_source_references,
 )
-from synapse_ai.ui.cache import cached_document_chunks_by_references, cached_recent_analyses
+from synapse_ai.ui.cache import (
+    cached_document_chunks_by_references,
+    cached_recent_analyses,
+    get_session_supabase_connection,
+)
 from synapse_ai.ui.state import current_tenant_id
 from synapse_ai.ui.theme import render_empty_state, render_kpi_card, render_page_header
 
@@ -43,7 +46,7 @@ def render_audit_page(config: AppConfig) -> None:
         return
 
     try:
-        connection = create_authenticated_supabase_connection(
+        connection = get_session_supabase_connection(
             config,
             access_token,
             get_refresh_token(),
@@ -79,20 +82,20 @@ def render_audit_page(config: AppConfig) -> None:
     download_cols = st.columns(3)
     download_cols[0].download_button(
         "Exportar relatório premium PDF",
-        data=audit_records_to_premium_pdf(filtered_records),
+        data=_cached_premium_audit_pdf(tuple(filtered_records)),
         file_name="relatorio_premium_auditoria_synapse.pdf",
         mime="application/pdf",
         type="primary",
     )
     download_cols[1].download_button(
         "Exportar pacote PDF",
-        data=audit_records_to_pdf(filtered_records),
+        data=_cached_audit_pdf(tuple(filtered_records)),
         file_name="pacote_de_evidencias_synapse.pdf",
         mime="application/pdf",
     )
     download_cols[2].download_button(
         "Exportar pacote Markdown",
-        data=audit_records_to_markdown(filtered_records),
+        data=_cached_audit_markdown(tuple(filtered_records)),
         file_name="pacote_de_evidencias_synapse.md",
         mime="text/markdown",
     )
@@ -105,6 +108,21 @@ def _filter_records(records: list[AuditRecord]) -> list[AuditRecord]:
     if selected_type == "Todos":
         return records
     return [record for record in records if record.artifact_type == selected_type]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_premium_audit_pdf(records: tuple[AuditRecord, ...]) -> bytes:
+    return audit_records_to_premium_pdf(list(records))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_audit_pdf(records: tuple[AuditRecord, ...]) -> bytes:
+    return audit_records_to_pdf(list(records))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_audit_markdown(records: tuple[AuditRecord, ...]) -> str:
+    return audit_records_to_markdown(list(records))
 
 
 def _render_audit_summary(records: list[AuditRecord]) -> None:
@@ -153,7 +171,7 @@ def _render_audit_records(records: list[AuditRecord]) -> None:
             _render_sources(record)
             st.download_button(
                 "Exportar PDF deste registro",
-                data=audit_records_to_pdf([record]),
+                data=_cached_audit_pdf((record,)),
                 file_name=f"evidencias_{_safe_filename(record.title)}.pdf",
                 mime="application/pdf",
                 key=f"audit-download-pdf-{record.title}-{record.created_at}",

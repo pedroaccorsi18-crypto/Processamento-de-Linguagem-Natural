@@ -11,7 +11,6 @@ from synapse_ai.auth.session import (
     set_auth_session,
     update_auth_tokens,
 )
-from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.models.user import AuthenticatedUser
 from synapse_ai.services.audio_transcription_service import (
@@ -61,7 +60,9 @@ from synapse_ai.ui.cache import (
     cached_document_chunk_counts,
     cached_user_documents,
     get_openai_client,
+    get_session_supabase_connection,
     invalidate_data_cache,
+    invalidate_session_resources,
 )
 from synapse_ai.ui.state import (
     current_tenant_id,
@@ -96,7 +97,7 @@ def render_upload_page(config: AppConfig) -> None:
         return
 
     try:
-        connection = create_authenticated_supabase_connection(
+        connection = get_session_supabase_connection(
             config,
             access_token,
             get_refresh_token(),
@@ -301,6 +302,7 @@ def restore_google_drive_oauth_synapse_session() -> bool:
     ):
         return False
 
+    invalidate_session_resources()
     set_auth_session(
         AuthenticatedUser(
             id=pending_authorization.user_id,

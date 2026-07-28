@@ -23,7 +23,6 @@ from synapse_ai.auth.session import (
     get_refresh_token,
     update_auth_tokens,
 )
-from synapse_ai.clients.supabase_client import create_authenticated_supabase_connection
 from synapse_ai.config import AppConfig
 from synapse_ai.services.agent_service import (
     MultiAgentReport,
@@ -82,8 +81,9 @@ from synapse_ai.ui.cache import (
     cached_document_chunk_counts,
     cached_recent_analyses,
     cached_user_documents_for_processing,
-    get_openai_client,
+    get_session_supabase_connection,
     invalidate_data_cache,
+    lazy_openai_client,
 )
 from synapse_ai.ui.state import current_tenant_id, remember_analysis_result
 from synapse_ai.ui.theme import render_callout, render_kpi_card, render_page_header
@@ -109,7 +109,7 @@ def render_analysis_page(config: AppConfig) -> None:
         return
 
     try:
-        connection = create_authenticated_supabase_connection(
+        connection = get_session_supabase_connection(
             config,
             access_token,
             get_refresh_token(),
@@ -121,7 +121,7 @@ def render_analysis_page(config: AppConfig) -> None:
     supabase_client = connection.client
 
     tenant_id = current_tenant_id(user)
-    openai_client = get_openai_client(config)
+    openai_client = lazy_openai_client(config)
     documents = cached_user_documents_for_processing(supabase_client, tenant_id, user.id)
 
     st.subheader("Escopo de trabalho")

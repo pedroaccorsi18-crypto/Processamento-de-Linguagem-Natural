@@ -517,18 +517,33 @@ def _render_pending_copilot_action(*, prefix: str = "main") -> None:
         st.rerun()
 
 
-def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) -> str:
-    api_key = resolve_openai_api_key(st.secrets, fallback=config.openai.api_key)
-    if not api_key:
+def _generate_copilot_answer(
+    config: AppConfig,
+    messages: list[CopilotMessage],
+    *,
+    api_key: str | None = None,
+    model: str | None = None,
+    context_snapshot: str | None = None,
+    current_area: str | None = None,
+    openai_client: Any | None = None,
+) -> str:
+    resolved_api_key = api_key or resolve_openai_api_key(st.secrets, fallback=config.openai.api_key)
+    if not resolved_api_key:
         return (
             "Não encontrei a chave da OpenAI configurada para o Copiloto. "
             "Configure `OPENAI_API_KEY` nos segredos do Streamlit para ativar as respostas."
         )
 
-    model = str(st.session_state.get(COPILOT_MODEL_KEY) or config.openai.generation_model)
-    client = get_cached_openai_client(api_key)
-    context_snapshot = _load_copilot_context_snapshot(config)
-    current_area = _current_product_area()
+    selected_model = model or str(
+        st.session_state.get(COPILOT_MODEL_KEY) or config.openai.generation_model
+    )
+    client = openai_client or get_cached_openai_client(resolved_api_key)
+    resolved_context_snapshot = (
+        context_snapshot
+        if context_snapshot is not None
+        else _load_copilot_context_snapshot(config)
+    )
+    resolved_current_area = current_area or _current_product_area()
     system_content = (
         f"{COPILOT_SYSTEM_PROMPT}\n\n"
         "Mapa do produto:\n"
@@ -538,9 +553,9 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
         "- Estúdio de IA: perguntas com fontes, plano de ação, padrões históricos e multiagente.\n"
         "- Insights: análise de riscos, alertas preventivos e achados organizacionais.\n"
         "- Evidências: auditoria, fontes salvas, registros e pacotes exportáveis.\n\n"
-        f"Área atual do usuário: {current_area}.\n\n"
+        f"Área atual do usuário: {resolved_current_area}.\n\n"
         "Contexto disponível do usuário:\n"
-        f"{context_snapshot or 'Nenhum contexto documental adicional foi carregado.'}"
+        f"{resolved_context_snapshot or 'Nenhum contexto documental adicional foi carregado.'}"
     )
     chat_messages = [
         {"role": "system", "content": system_content},
@@ -551,7 +566,7 @@ def _generate_copilot_answer(config: AppConfig, messages: list[CopilotMessage]) 
     ]
     try:
         response = client.chat.completions.create(
-            model=model,
+            model=selected_model,
             messages=chat_messages,
         )
     except Exception:  # noqa: BLE001

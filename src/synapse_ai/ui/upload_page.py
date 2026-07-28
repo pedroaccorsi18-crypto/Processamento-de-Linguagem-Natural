@@ -177,24 +177,18 @@ def render_upload_page(config: AppConfig) -> None:
                 documents,
                 user.id,
             )
-            allow_duplicate_save = True
             button_label = "Salvar documento"
             if duplicate_document is not None:
                 st.warning(
-                    "Este arquivo parece já ter sido enviado. Encontramos outro documento "
-                    f"com o mesmo conteúdo: {duplicate_document.get('filename', 'documento')}."
-                )
-                allow_duplicate_save = st.checkbox(
-                    "Salvar mesmo assim como nova versão",
-                    value=False,
-                    help=(
-                        "Use esta opção quando o arquivo for uma nova versão intencional. "
-                        "Caso contrário, utilize o documento já salvo abaixo."
-                    ),
+                    "Este arquivo parece já existir na sua conta. O Synapse encontrou "
+                    "outro documento com o mesmo conteúdo: "
+                    f"{duplicate_document.get('filename', 'documento')}.\n\n"
+                    "Isso não bloqueia o envio. Se você quiser manter uma nova cópia "
+                    "para teste, comparação ou versão atualizada, salve como nova versão."
                 )
                 button_label = "Salvar nova versão"
 
-            if st.button(button_label, disabled=not allow_duplicate_save, type="primary"):
+            if st.button(button_label, type="primary"):
                 try:
                     with st.spinner("Salvando documento e preparando trilha de auditoria..."):
                         saved_document = save_parsed_document(client, user.id, parsed_document)
@@ -460,7 +454,9 @@ def _import_google_drive_files(
                 _find_duplicate_document(parsed_document.metadata, documents, user_id)
                 is not None
             ):
-                st.warning(f"{downloaded_file.filename} já existe na base e foi ignorado.")
+                st.warning(
+                    f"{downloaded_file.filename} já existe na sua conta e foi ignorado."
+                )
                 continue
             saved_document = save_parsed_document(client, user_id, parsed_document)
             invalidate_data_cache()
@@ -662,7 +658,8 @@ def _find_duplicate_document(
         return None
 
     for document in documents:
-        if document.get("user_id") != current_user_id:
+        document_user_id = document.get("user_id")
+        if not isinstance(document_user_id, str) or document_user_id != current_user_id:
             continue
         metadata = document.get("metadata")
         if not isinstance(metadata, dict):

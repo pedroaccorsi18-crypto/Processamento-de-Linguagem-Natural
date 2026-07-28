@@ -344,6 +344,7 @@ def _render_analysis_workflow_center(
         index=workflow_labels.index(default_label),
         help="Troque o tipo de análise sem precisar percorrer uma tela longa.",
     )
+    _render_workflow_guidance(selected_workflow)
 
     if selected_workflow == "Inteligência organizacional":
         _render_intelligence_workflow(
@@ -411,6 +412,51 @@ def _default_analysis_workflow_label(workflow_labels: list[str]) -> str:
     }
     focused_label = focus_to_label.get(str(st.session_state.get("analysis_focus", "")))
     return focused_label if focused_label in workflow_labels else workflow_labels[0]
+
+
+def _render_workflow_guidance(selected_workflow: str) -> None:
+    guidance = {
+        "Inteligência organizacional": (
+            "Fotografia executiva",
+            "Melhor escolha para entender rapidamente decisões, riscos, prazos e lacunas "
+            "presentes nos documentos selecionados.",
+        ),
+        "Comparação documental": (
+            "Comparação entre versões ou fontes",
+            "Use quando houver mais de um documento no mesmo contexto e você quiser detectar "
+            "divergências, mudanças de prazo ou responsabilidades conflitantes.",
+        ),
+        "Sentimentos organizacionais": (
+            "Leitura de tom e tensão",
+            "Útil para transcrições, atas e comunicações internas em que urgência, conflito "
+            "ou confiança precisam ser interpretados.",
+        ),
+        "Alertas preventivos": (
+            "Radar de atenção",
+            "Transforma evidências em sinais de acompanhamento, como pendências, riscos sem "
+            "plano e decisões que exigem validação.",
+        ),
+        "Padrões históricos": (
+            "Recorrências no tempo",
+            "Compara o escopo atual com análises salvas para revelar problemas repetidos "
+            "ou comportamentos recorrentes.",
+        ),
+        "Orquestração multiagente": (
+            "Parecer por especialistas",
+            "Executa perspectivas diferentes sobre o mesmo escopo, como risco, decisão, "
+            "governança e consistência documental.",
+        ),
+        "Plano de ação": (
+            "Da análise para execução",
+            "Converte achados em tarefas, responsáveis, prazos, critérios de aceite e riscos "
+            "a acompanhar.",
+        ),
+    }
+    title, body = guidance.get(
+        selected_workflow,
+        ("Análise especializada", "Use esta capacidade para aprofundar o escopo selecionado."),
+    )
+    render_callout(title, body)
 
 
 def _render_save_toggle(label: str, help_text: str, key: str) -> bool:

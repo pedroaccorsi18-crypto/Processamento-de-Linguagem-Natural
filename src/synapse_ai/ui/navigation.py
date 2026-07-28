@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from synapse_ai.auth.session import clear_session, get_current_session_user
+
 
 def public_navigation() -> str:
     st.sidebar.title("Synapse AI")
@@ -18,6 +20,13 @@ def public_navigation() -> str:
 
 def private_navigation() -> str:
     st.sidebar.title("Synapse AI")
+    user = get_current_session_user()
+    if user is not None:
+        st.sidebar.caption(f"Conta: {user.email}")
+        if st.sidebar.button("Sair", key="sidebar-logout"):
+            clear_session()
+            st.rerun()
+
     pending_page = st.session_state.pop("pending_private_page", None)
     if pending_page in {"dashboard", "upload", "analysis", "intelligence", "audit"}:
         st.session_state["private_page"] = pending_page

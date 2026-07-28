@@ -66,7 +66,12 @@ from synapse_ai.ui.state import (
     remember_document_status,
     remember_processed_document,
 )
-from synapse_ai.ui.theme import render_document_card, render_page_header, render_status_badge
+from synapse_ai.ui.theme import (
+    render_document_card,
+    render_empty_state,
+    render_page_header,
+    render_status_badge,
+)
 
 
 def render_upload_page(config: AppConfig) -> None:
@@ -106,8 +111,12 @@ def render_upload_page(config: AppConfig) -> None:
         tuple(_document_ids(documents)),
         config.openai.embedding_model,
     )
-    upload_col, source_col = st.columns((1.1, 0.9))
-    with upload_col:
+    upload_tab, drive_tab, documents_tab = st.tabs(
+        ["Enviar arquivo", "Google Drive", "Documentos recentes"]
+    )
+
+    uploaded_file = None
+    with upload_tab:
         st.subheader("Enviar arquivo")
         uploaded_file = st.file_uploader(
             "Selecione um documento",
@@ -136,108 +145,115 @@ def render_upload_page(config: AppConfig) -> None:
         st.caption("Limite nesta fase: 10 MB por arquivo.")
         st.caption("O arquivo original fica guardado em storage privado para download futuro.")
 
-    with source_col:
+        if uploaded_file is not None:
+            uploaded_document = UploadedDocument(
+                filename=uploaded_file.name,
+                content_type=uploaded_file.type or "application/octet-stream",
+                content=uploaded_file.getvalue(),
+            )
+            try:
+                with st.spinner("Extraindo texto e metadados do documento..."):
+                    parsed_document = _parse_document_for_upload(config, uploaded_document)
+            except (AudioTranscriptionError, DocumentProcessingError, RuntimeError) as exc:
+                st.error(str(exc))
+                return
+
+            st.subheader("Prévia da extração")
+            metric_cols = st.columns(3)
+            metric_cols[0].metric("Tamanho", f"{parsed_document.size_bytes / 1024:.1f} KB")
+            metric_cols[1].metric("Caracteres", str(len(parsed_document.text)))
+            metric_cols[2].metric("Palavras", str(parsed_document.metadata["word_count"]))
+
+            with st.expander("Texto extraído"):
+                st.text_area(
+                    "Prévia",
+                    value=preview_text(parsed_document.text),
+                    height=240,
+                    disabled=True,
+                )
+
+            duplicate_document = _find_duplicate_document(
+                parsed_document.metadata,
+                documents,
+                user.id,
+            )
+            allow_duplicate_save = True
+            button_label = "Salvar documento"
+            if duplicate_document is not None:
+                st.warning(
+                    "Este arquivo parece já ter sido enviado. Encontramos outro documento "
+                    f"com o mesmo conteúdo: {duplicate_document.get('filename', 'documento')}."
+                )
+                allow_duplicate_save = st.checkbox(
+                    "Salvar mesmo assim como nova versão",
+                    value=False,
+                    help=(
+                        "Use esta opção quando o arquivo for uma nova versão intencional. "
+                        "Caso contrário, utilize o documento já salvo abaixo."
+                    ),
+                )
+                button_label = "Salvar nova versão"
+
+            if st.button(button_label, disabled=not allow_duplicate_save, type="primary"):
+                try:
+                    with st.spinner("Salvando documento e preparando trilha de auditoria..."):
+                        saved_document = save_parsed_document(client, user.id, parsed_document)
+                        invalidate_data_cache()
+                except DocumentPersistenceError as exc:
+                    st.error(str(exc))
+                else:
+                    document_id = saved_document.get("id")
+                    original_file_saved = False
+                    if isinstance(document_id, str) and document_id:
+                        remember_processed_document(
+                            document_id,
+                            str(saved_document.get("filename") or parsed_document.filename),
+                        )
+                        remember_document_status(document_id, "extracted")
+                        original_file_saved = _store_original_file(
+                            client,
+                            user.id,
+                            document_id,
+                            uploaded_document,
+                        )
+                    if original_file_saved:
+                        st.success("Documento processado, salvo e disponível para download.")
+                        st.toast("Documento salvo com sucesso.")
+                        st.rerun()
+                    else:
+                        st.warning(
+                            "Documento processado e salvo para análise, mas o arquivo original "
+                            "não ficou disponível para download."
+                        )
+
+    with drive_tab:
+        st.subheader("Importar de fonte corporativa")
         _render_google_drive_import(config, client, user.id, documents)
 
-    if uploaded_file is not None:
-        uploaded_document = UploadedDocument(
-            filename=uploaded_file.name,
-            content_type=uploaded_file.type or "application/octet-stream",
-            content=uploaded_file.getvalue(),
-        )
-        try:
-            with st.spinner("Extraindo texto e metadados do documento..."):
-                parsed_document = _parse_document_for_upload(config, uploaded_document)
-        except (AudioTranscriptionError, DocumentProcessingError, RuntimeError) as exc:
-            st.error(str(exc))
+    with documents_tab:
+        st.subheader("Documentos recentes")
+        if not documents:
+            render_empty_state(
+                "Nenhum documento salvo ainda.",
+                "Envie um arquivo local ou conecte o Google Drive para iniciar sua base "
+                "documental.",
+                icon="DOC",
+            )
             return
 
-        st.subheader("Prévia da extração")
-        metric_cols = st.columns(3)
-        metric_cols[0].metric("Tamanho", f"{parsed_document.size_bytes / 1024:.1f} KB")
-        metric_cols[1].metric("Caracteres", str(len(parsed_document.text)))
-        metric_cols[2].metric("Palavras", str(parsed_document.metadata["word_count"]))
-
-        with st.expander("Texto extraído"):
-            st.text_area(
-                "Prévia",
-                value=preview_text(parsed_document.text),
-                height=240,
-                disabled=True,
-            )
-
-        duplicate_document = _find_duplicate_document(
-            parsed_document.metadata,
-            documents,
-            user.id,
-        )
-        allow_duplicate_save = True
-        button_label = "Salvar documento"
-        if duplicate_document is not None:
-            st.warning(
-                "Este arquivo parece já ter sido enviado. Encontramos outro documento "
-                f"com o mesmo conteúdo: {duplicate_document.get('filename', 'documento')}."
-            )
-            allow_duplicate_save = st.checkbox(
-                "Salvar mesmo assim como nova versão",
-                value=False,
-                help=(
-                    "Use esta opção quando o arquivo for uma nova versão intencional. "
-                    "Caso contrário, utilize o documento já salvo abaixo."
-                ),
-            )
-            button_label = "Salvar nova versão"
-
-        if st.button(button_label, disabled=not allow_duplicate_save, type="primary"):
-            try:
-                with st.spinner("Salvando documento e preparando trilha de auditoria..."):
-                    saved_document = save_parsed_document(client, user.id, parsed_document)
-                    invalidate_data_cache()
-            except DocumentPersistenceError as exc:
-                st.error(str(exc))
-            else:
-                document_id = saved_document.get("id")
-                original_file_saved = False
-                if isinstance(document_id, str) and document_id:
-                    remember_processed_document(
-                        document_id,
-                        str(saved_document.get("filename") or parsed_document.filename),
-                    )
-                    remember_document_status(document_id, "extracted")
-                    original_file_saved = _store_original_file(
-                        client,
-                        user.id,
-                        document_id,
-                        uploaded_document,
-                    )
-                if original_file_saved:
-                    st.success("Documento processado, salvo e disponível para download.")
-                    st.toast("Documento salvo com sucesso.")
-                    st.rerun()
-                else:
-                    st.warning(
-                        "Documento processado e salvo para análise, mas o arquivo original "
-                        "não ficou disponível para download."
-                    )
-
-    st.subheader("Documentos recentes")
-    if not documents:
-        st.info("Nenhum documento salvo ainda.")
-        return
-
-    for document in documents:
-        with st.container():
-            document_status, status_label = _document_ai_status(document, chunk_counts)
-            render_document_card(
-                str(document.get("filename") or "Documento sem nome"),
-                [
-                    f"Status: {document.get('status', 'indefinido')}",
-                    f"Caracteres: {document.get('text_char_count', 0)}",
-                ],
-                status=document_status,
-                status_label=status_label,
-            )
-            _render_download_button(client, document)
+        for document in documents:
+            with st.container():
+                document_status, status_label = _document_ai_status(document, chunk_counts)
+                render_document_card(
+                    str(document.get("filename") or "Documento sem nome"),
+                    [
+                        f"Status: {document.get('status', 'indefinido')}",
+                        f"Caracteres: {document.get('text_char_count', 0)}",
+                    ],
+                    status=document_status,
+                    status_label=status_label,
+                )
+                _render_download_button(client, document)
 
 
 def has_google_drive_oauth_return() -> bool:
@@ -345,7 +361,7 @@ def _render_google_drive_import(
     user_id: str,
     documents: list[dict[str, object]],
 ) -> None:
-    with st.expander("Importar do Google Drive"):
+    with st.expander("Configurar conexão e buscar arquivos", expanded=True):
         _complete_google_drive_oauth_if_needed(config)
         credentials = _google_drive_credentials(config)
 

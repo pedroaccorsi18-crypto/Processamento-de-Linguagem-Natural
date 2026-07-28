@@ -10,7 +10,6 @@ import streamlit as st
 from synapse_ai.application.dashboard import IntelligentExecutiveReportCommand
 from synapse_ai.application.result import ResultSeverity, UseCaseResult
 from synapse_ai.auth.session import (
-    clear_session,
     get_access_token,
     get_current_session_user,
     get_refresh_token,
@@ -79,12 +78,6 @@ def render_dashboard_page(config: AppConfig) -> None:
         "Leitura consolidada da base documental, riscos, planos de ação e inteligência salva.",
         "Área autenticada",
     )
-    if user is not None:
-        st.caption(f"Usuário autenticado: {user.email}")
-
-    if st.button("Sair"):
-        clear_session()
-        st.rerun()
 
     if user is None:
         st.info("Não conseguimos confirmar sua conta nesta aba. Atualize a página para continuar.")

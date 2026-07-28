@@ -21,7 +21,7 @@ from synapse_ai.services.audit_service import (
 )
 from synapse_ai.ui.cache import cached_document_chunks_by_references, cached_recent_analyses
 from synapse_ai.ui.state import current_tenant_id
-from synapse_ai.ui.theme import render_empty_state, render_page_header
+from synapse_ai.ui.theme import render_empty_state, render_kpi_card, render_page_header
 
 
 def render_audit_page(config: AppConfig) -> None:
@@ -110,11 +110,26 @@ def _filter_records(records: list[AuditRecord]) -> list[AuditRecord]:
 def _render_audit_summary(records: list[AuditRecord]) -> None:
     summary = build_audit_summary(records)
     metric_cols = st.columns(5)
-    metric_cols[0].metric("Registros", summary.records)
-    metric_cols[1].metric("Fontes", summary.sources)
-    metric_cols[2].metric("Documentos", summary.documents)
-    metric_cols[3].metric("Sem evidência", summary.missing_evidence)
-    metric_cols[4].metric("Nomes duplicados", summary.duplicate_filename_records)
+    with metric_cols[0]:
+        render_kpi_card("Registros", summary.records, "Itens auditáveis salvos.", tone="blue")
+    with metric_cols[1]:
+        render_kpi_card("Fontes", summary.sources, "Referências rastreadas.", tone="green")
+    with metric_cols[2]:
+        render_kpi_card("Documentos", summary.documents, "Arquivos citados.", tone="blue")
+    with metric_cols[3]:
+        render_kpi_card(
+            "Sem evidência",
+            summary.missing_evidence,
+            "Fontes sem trecho localizado.",
+            tone="amber" if summary.missing_evidence else "green",
+        )
+    with metric_cols[4]:
+        render_kpi_card(
+            "Duplicados",
+            summary.duplicate_filename_records,
+            "Registros com nomes repetidos.",
+            tone="amber" if summary.duplicate_filename_records else "green",
+        )
     if summary.missing_evidence:
         st.warning("Há fontes salvas cujo trecho não foi encontrado na busca atual.")
     if summary.duplicate_filename_records:

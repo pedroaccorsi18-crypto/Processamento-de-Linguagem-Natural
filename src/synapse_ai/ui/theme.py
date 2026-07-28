@@ -315,6 +315,26 @@ def apply_synapse_theme() -> None:
             line-height: 1.45;
         }
 
+        [data-testid="stTabs"] [role="tablist"] {
+            gap: 0.35rem;
+            border-bottom: 1px solid var(--synapse-border);
+            margin-bottom: 1rem;
+        }
+
+        [data-testid="stTabs"] [role="tab"] {
+            min-height: 42px;
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px 8px 0 0;
+            color: var(--synapse-muted) !important;
+            font-weight: 750;
+        }
+
+        [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+            background: var(--synapse-surface);
+            color: var(--synapse-brand-dark) !important;
+            border-bottom: 3px solid var(--synapse-brand);
+        }
+
         .synapse-empty-state {
             background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
             border: 1px dashed #bcd0ea;
@@ -377,6 +397,11 @@ def apply_synapse_theme() -> None:
             border-color: var(--synapse-border) !important;
             border-radius: var(--synapse-radius) !important;
             box-shadow: none !important;
+        }
+
+        [data-testid="stExpander"] details summary {
+            color: var(--synapse-ink) !important;
+            font-weight: 750;
         }
 
         .stDataFrame,
@@ -660,6 +685,11 @@ def apply_synapse_theme() -> None:
 
             .synapse-empty-state {
                 padding: 1rem;
+            }
+
+            [data-testid="stTabs"] [role="tab"] {
+                padding: 0.42rem 0.62rem;
+                font-size: 0.92rem;
             }
 
             .synapse-case-card {

@@ -472,6 +472,42 @@ def apply_synapse_theme() -> None:
             align-items: stretch;
         }
 
+        .synapse-landing-hero {
+            max-width: 980px;
+            margin: 2.2rem auto 1.35rem auto;
+            text-align: center;
+            padding: 2.2rem 1rem 1.1rem 1rem;
+        }
+
+        .synapse-landing-hero h1 {
+            max-width: 920px;
+            margin: 0 auto;
+            color: var(--synapse-ink);
+            font-size: clamp(2.35rem, 5vw, 4.4rem) !important;
+            line-height: 1.02 !important;
+            font-weight: 900 !important;
+        }
+
+        .synapse-landing-hero p {
+            max-width: 820px;
+            margin: 1.25rem auto 0 auto;
+            color: #475569;
+            font-size: 1.12rem;
+            line-height: 1.68;
+        }
+
+        .synapse-section-heading {
+            margin: 3.3rem 0 1.25rem 0;
+            text-align: center;
+        }
+
+        .synapse-section-heading h2 {
+            margin: 0;
+            color: var(--synapse-ink);
+            font-size: clamp(1.75rem, 3vw, 2.45rem) !important;
+            font-weight: 850 !important;
+        }
+
         .synapse-hero-panel {
             background: #111827;
             border-radius: 18px;
@@ -499,6 +535,11 @@ def apply_synapse_theme() -> None:
 
             .synapse-public-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .synapse-landing-hero {
+                margin-top: 0.8rem;
+                padding-top: 1.3rem;
             }
         }
 

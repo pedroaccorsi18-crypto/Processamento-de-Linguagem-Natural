@@ -5,6 +5,9 @@ import streamlit as st
 
 def public_navigation() -> str:
     st.sidebar.title("Synapse AI")
+    pending_page = st.session_state.pop("pending_public_page", None)
+    if pending_page in {"home", "login", "register"}:
+        st.session_state["public_page"] = pending_page
     return st.sidebar.radio(
         "Navegação",
         options=("home", "login", "register"),

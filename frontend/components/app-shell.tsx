@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -17,7 +18,12 @@ const navigationItems = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (pathname === "/about" || pathname === "/privacy" || pathname === "/terms") {
+  if (
+    pathname === "/" ||
+    pathname === "/about" ||
+    pathname === "/privacy" ||
+    pathname === "/terms"
+  ) {
     return <div className="min-h-screen bg-surface-subtle">{children}</div>;
   }
   return (
@@ -35,7 +41,10 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-surface-subtle">
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-white/10 bg-ink px-6 py-8 text-white lg:flex">
         <div>
-          <p className="text-2xl font-bold tracking-tight">Synapse AI</p>
+          <div className="flex items-center gap-3">
+            <Image alt="" height={34} priority src="/brand/synapse-mark.png" width={36} />
+            <p className="text-2xl font-bold tracking-tight">Synapse AI</p>
+          </div>
           <p className="mt-2 text-sm leading-6 text-slate-300">
             Inteligência organizacional com rastreabilidade.
           </p>
@@ -76,7 +85,10 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-ink px-4 py-4 text-white shadow-lg shadow-slate-950/5 lg:hidden">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-lg font-black tracking-tight">Synapse AI</p>
+            <div className="flex items-center gap-2">
+              <Image alt="" height={24} priority src="/brand/synapse-mark.png" width={26} />
+              <p className="text-lg font-black tracking-tight">Synapse AI</p>
+            </div>
             <p className="mt-1 truncate text-xs text-slate-300">Conta: {user.email}</p>
           </div>
           <button

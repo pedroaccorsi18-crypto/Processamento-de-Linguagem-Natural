@@ -8,7 +8,7 @@ on:
 permissions: {}
 
 env:
-  HEALTHCHECK_URL: https://synapse-ai-api-l8di.onrender.com/health
+  HEALTHCHECK_URL: https://synapse-ai-api-prod.onrender.com/health
 
 concurrency:
   group: synapse-api-keep-alive

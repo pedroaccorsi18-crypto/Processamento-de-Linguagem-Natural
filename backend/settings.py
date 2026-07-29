@@ -33,6 +33,11 @@ def backend_cors_origin_regex() -> str:
     return r"^https://processamento-de-linguagem-natural(?:-[a-z0-9]+)?\.vercel\.app$"
 
 
+def connector_encryption_key() -> str:
+    """Return the backend-only key used to encrypt provider credentials at rest."""
+    return os.getenv("CONNECTOR_ENCRYPTION_KEY", "").strip()
+
+
 def _load_streamlit_secrets() -> dict[str, Any]:
     if not STREAMLIT_SECRETS_PATH.exists():
         return {}

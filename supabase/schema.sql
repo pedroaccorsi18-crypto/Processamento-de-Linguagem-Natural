@@ -59,10 +59,22 @@ create table if not exists public.document_chunks (
   unique (document_id, chunk_index)
 );
 
+create table if not exists public.integration_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null,
+  encrypted_credentials text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, provider)
+);
+
 alter table public.profiles enable row level security;
 alter table public.documents enable row level security;
 alter table public.analyses enable row level security;
 alter table public.document_chunks enable row level security;
+alter table public.integration_connections enable row level security;
 
 alter table public.documents
   add column if not exists extracted_text text,
@@ -261,6 +273,47 @@ begin
 
   if not exists (
     select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'integration_connections'
+    and policyname = 'Users can read their own integration connections'
+  ) then
+    create policy "Users can read their own integration connections"
+    on public.integration_connections for select
+    using (auth.uid() = user_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'integration_connections'
+    and policyname = 'Users can insert their own integration connections'
+  ) then
+    create policy "Users can insert their own integration connections"
+    on public.integration_connections for insert
+    with check (auth.uid() = user_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'integration_connections'
+    and policyname = 'Users can update their own integration connections'
+  ) then
+    create policy "Users can update their own integration connections"
+    on public.integration_connections for update
+    using (auth.uid() = user_id)
+    with check (auth.uid() = user_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'integration_connections'
+    and policyname = 'Users can delete their own integration connections'
+  ) then
+    create policy "Users can delete their own integration connections"
+    on public.integration_connections for delete
+    using (auth.uid() = user_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
     where schemaname = 'public' and tablename = 'document_chunks'
     and policyname = 'Users can update their own document chunks'
   ) then
@@ -331,6 +384,9 @@ on public.document_chunks (user_id);
 
 create index if not exists analyses_user_id_created_at_idx
 on public.analyses (user_id, created_at desc);
+
+create index if not exists integration_connections_user_id_idx
+on public.integration_connections (user_id, updated_at desc);
 
 create index if not exists document_chunks_embedding_idx
 on public.document_chunks

@@ -63,6 +63,31 @@ export type StudioHistoryEntry = {
   created_at: string | null;
 };
 
+export type IntegrationProvider = "google_drive" | "slack" | "microsoft_teams" | "sharepoint";
+
+export type IntegrationStatus = {
+  provider: IntegrationProvider;
+  label: string;
+  availability: "available" | "needs_configuration" | "coming_soon";
+  connected: boolean;
+  connected_at: string | null;
+  detail: string;
+};
+
+export type GoogleDriveFile = {
+  id: string;
+  name: string;
+  mime_type: string;
+  size_bytes: number | null;
+  web_view_link: string | null;
+};
+
+export type GoogleDriveImportResponse = {
+  imported_documents: SynapseDocument[];
+  failures: Array<{ filename: string; detail: string }>;
+  message: string;
+};
+
 type CopilotResponse = {
   answer: string;
   model: string;
@@ -78,6 +103,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 const COPILOT_REQUEST_TIMEOUT_MS = 75_000;
 const STUDIO_PREPARATION_TIMEOUT_MS = 90_000;
 const STUDIO_ANALYSIS_TIMEOUT_MS = 150_000;
+const CONNECTOR_REQUEST_TIMEOUT_MS = 90_000;
 
 function apiEndpoint(path: string): string {
   if (!apiUrl) {
@@ -266,4 +292,113 @@ export async function listStudioHistory(
     throw await responseError(response, "Não foi possível carregar o histórico do Estúdio.");
   }
   return (await response.json()) as StudioHistoryEntry[];
+}
+
+export async function listIntegrations(accessToken: string): Promise<IntegrationStatus[]> {
+  const response = await fetchApi("/api/integrations", accessToken, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível carregar as fontes corporativas.");
+  }
+  return (await response.json()) as IntegrationStatus[];
+}
+
+export async function beginGoogleDriveAuthorization(accessToken: string): Promise<{
+  authorization_url: string;
+  state: string;
+  code_verifier: string;
+}> {
+  const response = await fetchApi(
+    "/api/integrations/google-drive/authorization",
+    accessToken,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível iniciar a conexão com o Google Drive.");
+  }
+  return (await response.json()) as {
+    authorization_url: string;
+    state: string;
+    code_verifier: string;
+  };
+}
+
+export async function completeGoogleDriveAuthorization(input: {
+  accessToken: string;
+  code: string;
+  state: string;
+  codeVerifier: string;
+}): Promise<IntegrationStatus> {
+  const response = await fetchApi(
+    "/api/integrations/google-drive/complete",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: input.code,
+        state: input.state,
+        code_verifier: input.codeVerifier,
+      }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível concluir a conexão com o Google Drive.");
+  }
+  return (await response.json()) as IntegrationStatus;
+}
+
+export async function disconnectGoogleDrive(accessToken: string): Promise<void> {
+  const response = await fetchApi("/api/integrations/google-drive", accessToken, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível desconectar o Google Drive.");
+  }
+}
+
+export async function listGoogleDriveFiles(input: {
+  accessToken: string;
+  folderReference: string;
+}): Promise<GoogleDriveFile[]> {
+  const response = await fetchApi(
+    "/api/integrations/google-drive/files",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_reference: input.folderReference }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar os arquivos do Google Drive.");
+  }
+  return (await response.json()) as GoogleDriveFile[];
+}
+
+export async function importGoogleDriveFiles(input: {
+  accessToken: string;
+  folderReference: string;
+  fileIds: string[];
+}): Promise<GoogleDriveImportResponse> {
+  const response = await fetchApi(
+    "/api/integrations/google-drive/import",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        folder_reference: input.folderReference,
+        file_ids: input.fileIds,
+      }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível importar os arquivos do Google Drive.");
+  }
+  return (await response.json()) as GoogleDriveImportResponse;
 }

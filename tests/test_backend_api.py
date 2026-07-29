@@ -5,6 +5,7 @@ import asyncio
 import backend.main as backend_main
 import pytest
 from backend.auth import AuthenticatedRequest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from synapse_ai.application.indexing import PrepareSemanticBaseOutput
@@ -17,6 +18,8 @@ from synapse_ai.config import (
     SupabaseSettings,
 )
 from synapse_ai.models.user import AuthenticatedUser
+from synapse_ai.services.google_drive_connection_service import GoogleDriveConnectionStatus
+from synapse_ai.services.google_oauth_service import GoogleOAuthTokens
 
 
 def _config() -> AppConfig:
@@ -36,6 +39,28 @@ def _authenticated_request() -> AuthenticatedRequest:
         user=AuthenticatedUser(id="user-1", email="user@example.com"),
         client=object(),
         config=_config(),
+    )
+
+
+def _google_drive_authenticated_request(
+    user_id: str = "user-1",
+) -> AuthenticatedRequest:
+    return AuthenticatedRequest(
+        user=AuthenticatedUser(id=user_id, email="user@example.com"),
+        client=object(),
+        config=AppConfig(
+            supabase=SupabaseSettings(
+                url="https://example.supabase.co",
+                publishable_key="public-key",
+            ),
+            openai=OpenAISettings(api_key="sk-test", generation_model="gpt-test"),
+            google_drive=GoogleDriveSettings(
+                client_id="google-client-id",
+                client_secret="google-client-secret",
+                redirect_uri="http://localhost:3000/upload",
+            ),
+            app=AppSettings(),
+        ),
     )
 
 
@@ -75,6 +100,117 @@ def test_document_routes_require_an_authenticated_session() -> None:
     response = client.get("/api/documents")
 
     assert response.status_code == 401
+
+
+def test_integrations_returns_an_account_scoped_google_drive_status(monkeypatch) -> None:
+    encryption_key = Fernet.generate_key().decode("utf-8")
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _google_drive_authenticated_request
+    )
+    monkeypatch.setattr(backend_main, "connector_encryption_key", lambda: encryption_key)
+    monkeypatch.setattr(
+        backend_main,
+        "google_drive_connection_status",
+        lambda *_args: GoogleDriveConnectionStatus(
+            connected=True,
+            connected_at="2026-07-29T12:00:00+00:00",
+        ),
+    )
+    client = TestClient(backend_main.app)
+
+    try:
+        response = client.get("/api/integrations")
+    finally:
+        backend_main.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    integrations = {item["provider"]: item for item in response.json()}
+    assert integrations["google_drive"]["connected"] is True
+    assert integrations["slack"]["availability"] == "coming_soon"
+
+
+def test_google_drive_authorization_and_completion_are_bound_to_the_account(monkeypatch) -> None:
+    encryption_key = Fernet.generate_key().decode("utf-8")
+    observed: dict[str, object] = {}
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _google_drive_authenticated_request
+    )
+    monkeypatch.setattr(backend_main, "connector_encryption_key", lambda: encryption_key)
+    monkeypatch.setattr(
+        backend_main,
+        "build_google_oauth_authorization_url",
+        lambda *_args, **_kwargs: "https://accounts.google.test/authorize",
+    )
+    monkeypatch.setattr(
+        backend_main,
+        "exchange_google_oauth_code",
+        lambda *_args, **_kwargs: GoogleOAuthTokens(
+            access_token="access-token",
+            refresh_token="refresh-token",
+            token_type="Bearer",
+            expires_in=3600,
+        ),
+    )
+    monkeypatch.setattr(
+        backend_main,
+        "save_google_drive_connection",
+        lambda *_args: observed.setdefault(
+            "connection",
+            GoogleDriveConnectionStatus(
+                connected=True,
+                connected_at="2026-07-29T12:00:00+00:00",
+            ),
+        ),
+    )
+    client = TestClient(backend_main.app)
+
+    try:
+        authorization = client.post("/api/integrations/google-drive/authorization")
+        state = authorization.json()["state"]
+        completion = client.post(
+            "/api/integrations/google-drive/complete",
+            json={
+                "code": "authorization-code",
+                "state": state,
+                "code_verifier": "v" * 43,
+            },
+        )
+    finally:
+        backend_main.app.dependency_overrides.clear()
+
+    assert authorization.status_code == 200
+    assert authorization.json()["authorization_url"] == "https://accounts.google.test/authorize"
+    assert completion.status_code == 200
+    assert completion.json()["connected"] is True
+    assert observed["connection"] is not None
+
+
+def test_google_drive_oauth_rejects_a_callback_created_for_another_account(monkeypatch) -> None:
+    encryption_key = Fernet.generate_key().decode("utf-8")
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _google_drive_authenticated_request
+    )
+    monkeypatch.setattr(backend_main, "connector_encryption_key", lambda: encryption_key)
+    state = backend_main._build_google_drive_oauth_state(_google_drive_authenticated_request())
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = lambda: (
+        _google_drive_authenticated_request("user-2")
+    )
+    client = TestClient(backend_main.app)
+
+    try:
+        response = client.post(
+            "/api/integrations/google-drive/complete",
+            json={
+                "code": "authorization-code",
+                "state": state,
+                "code_verifier": "v" * 43,
+            },
+        )
+    finally:
+        backend_main.app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "O retorno do Google Drive pertence a outra conta."
 
 
 def test_uploaded_document_rejects_content_above_the_limit() -> None:

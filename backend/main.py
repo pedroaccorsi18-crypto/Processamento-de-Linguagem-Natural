@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -13,7 +13,11 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from backend.auth import AuthenticatedRequest, require_authenticated_request
-from backend.settings import backend_cors_origin_regex, backend_cors_origins
+from backend.settings import (
+    backend_cors_origin_regex,
+    backend_cors_origins,
+    connector_encryption_key,
+)
 from synapse_ai.application.analysis import (
     ActionPlanCommand,
     AskQuestionCommand,
@@ -65,6 +69,33 @@ from synapse_ai.services.document_storage import (
     download_original_document,
     upload_original_document,
 )
+from synapse_ai.services.google_drive_connection_service import (
+    GoogleDriveConnectionError,
+    disconnect_google_drive,
+    google_drive_connection_status,
+    load_google_drive_credentials,
+    save_google_drive_connection,
+)
+from synapse_ai.services.google_drive_service import (
+    GoogleDriveConnectorError,
+    GoogleDriveFile,
+    download_google_drive_file,
+    extract_google_drive_folder_id,
+    list_google_drive_folder_files,
+)
+from synapse_ai.services.google_oauth_service import (
+    GoogleOAuthError,
+    build_google_oauth_authorization_url,
+    build_pkce_code_challenge,
+    exchange_google_oauth_code,
+    generate_pkce_code_verifier,
+)
+from synapse_ai.services.integration_connection_service import IntegrationConnectionError
+from synapse_ai.services.integration_crypto import (
+    IntegrationCredentialError,
+    decrypt_integration_credentials,
+    encrypt_integration_credentials,
+)
 from synapse_ai.ui.copilot_page import CopilotMessage, _generate_copilot_answer
 
 logger = logging.getLogger(__name__)
@@ -79,6 +110,7 @@ StudioWorkflow = Literal[
     "historical_patterns",
     "multi_agent",
 ]
+IntegrationProvider = Literal["google_drive", "slack", "microsoft_teams", "sharepoint"]
 
 
 class CopilotMessagePayload(BaseModel):
@@ -120,6 +152,54 @@ class DocumentResponse(BaseModel):
 
 class DocumentUploadResponse(BaseModel):
     document: DocumentResponse
+    message: str
+
+
+class IntegrationStatusResponse(BaseModel):
+    provider: IntegrationProvider
+    label: str
+    availability: Literal["available", "needs_configuration", "coming_soon"]
+    connected: bool = False
+    connected_at: str | None = None
+    detail: str
+
+
+class GoogleDriveAuthorizationResponse(BaseModel):
+    authorization_url: str
+    state: str
+    code_verifier: str
+
+
+class GoogleDriveOAuthCompletionRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: str = Field(min_length=16, max_length=512)
+    code_verifier: str = Field(min_length=43, max_length=256)
+
+
+class GoogleDriveFolderRequest(BaseModel):
+    folder_reference: str = Field(min_length=1, max_length=2048)
+
+
+class GoogleDriveFileResponse(BaseModel):
+    id: str
+    name: str
+    mime_type: str
+    size_bytes: int | None = None
+    web_view_link: str | None = None
+
+
+class GoogleDriveImportRequest(GoogleDriveFolderRequest):
+    file_ids: list[str] = Field(min_length=1, max_length=20)
+
+
+class GoogleDriveImportFailure(BaseModel):
+    filename: str
+    detail: str
+
+
+class GoogleDriveImportResponse(BaseModel):
+    imported_documents: list[DocumentResponse] = Field(default_factory=list)
+    failures: list[GoogleDriveImportFailure] = Field(default_factory=list)
     message: str
 
 
@@ -209,6 +289,234 @@ async def get_documents(
 ) -> list[DocumentResponse]:
     documents = await run_in_threadpool(list_user_documents, request.client, request.user.id, 50)
     return [_document_response(document) for document in documents]
+
+
+@app.get("/api/integrations", response_model=list[IntegrationStatusResponse])
+async def get_integrations(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[IntegrationStatusResponse]:
+    """Describe connector availability without exposing provider credentials."""
+    google_status = _google_drive_status(request)
+    if google_status.availability == "available":
+        try:
+            connection = await run_in_threadpool(
+                google_drive_connection_status,
+                request.client,
+                request.user.id,
+            )
+            google_status = google_status.model_copy(
+                update={"connected": connection.connected, "connected_at": connection.connected_at}
+            )
+        except IntegrationConnectionError:
+            google_status = google_status.model_copy(
+                update={
+                    "availability": "needs_configuration",
+                    "detail": "A base segura de conexões ainda precisa ser preparada no servidor.",
+                }
+            )
+
+    return [
+        google_status,
+        IntegrationStatusResponse(
+            provider="slack",
+            label="Slack",
+            availability="coming_soon",
+            detail="Por enquanto, importe exportações do Slack em JSON pela área de arquivos.",
+        ),
+        IntegrationStatusResponse(
+            provider="microsoft_teams",
+            label="Microsoft Teams",
+            availability="coming_soon",
+            detail="Por enquanto, importe exportações do Teams em JSON ou transcrições VTT.",
+        ),
+        IntegrationStatusResponse(
+            provider="sharepoint",
+            label="SharePoint",
+            availability="coming_soon",
+            detail="A conexão via Microsoft Graph será liberada após o registro OAuth corporativo.",
+        ),
+    ]
+
+
+@app.post(
+    "/api/integrations/google-drive/authorization",
+    response_model=GoogleDriveAuthorizationResponse,
+)
+async def begin_google_drive_authorization(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> GoogleDriveAuthorizationResponse:
+    """Create a PKCE authorization URL; the browser retains the ephemeral verifier."""
+    _require_google_drive_configuration(request)
+    state = _build_google_drive_oauth_state(request)
+    code_verifier = generate_pkce_code_verifier()
+    try:
+        authorization_url = build_google_oauth_authorization_url(
+            request.config.google_drive.client_id,
+            request.config.google_drive.redirect_uri,
+            state,
+            code_challenge=build_pkce_code_challenge(code_verifier),
+        )
+    except GoogleOAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    return GoogleDriveAuthorizationResponse(
+        authorization_url=authorization_url,
+        state=state,
+        code_verifier=code_verifier,
+    )
+
+
+@app.post("/api/integrations/google-drive/complete", response_model=IntegrationStatusResponse)
+async def complete_google_drive_authorization(
+    payload: GoogleDriveOAuthCompletionRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> IntegrationStatusResponse:
+    """Exchange a Google code then save encrypted credentials for the authenticated account."""
+    _require_google_drive_configuration(request)
+    try:
+        _validate_google_drive_oauth_state(payload.state, request)
+        tokens = await run_in_threadpool(
+            exchange_google_oauth_code,
+            request.config.google_drive.client_id,
+            request.config.google_drive.client_secret,
+            request.config.google_drive.redirect_uri,
+            payload.code,
+            code_verifier=payload.code_verifier,
+        )
+        connection = await run_in_threadpool(
+            save_google_drive_connection,
+            request.client,
+            request.user.id,
+            tokens,
+            connector_encryption_key(),
+        )
+    except (
+        GoogleOAuthError,
+        GoogleDriveConnectionError,
+        IntegrationConnectionError,
+        IntegrationCredentialError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    return IntegrationStatusResponse(
+        provider="google_drive",
+        label="Google Drive",
+        availability="available",
+        connected=connection.connected,
+        connected_at=connection.connected_at,
+        detail="Google Drive conectado com acesso somente leitura aos arquivos autorizados.",
+    )
+
+
+@app.delete("/api/integrations/google-drive", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_google_drive_connection(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> None:
+    try:
+        await run_in_threadpool(disconnect_google_drive, request.client, request.user.id)
+    except IntegrationConnectionError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/integrations/google-drive/files",
+    response_model=list[GoogleDriveFileResponse],
+)
+async def list_google_drive_files(
+    payload: GoogleDriveFolderRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[GoogleDriveFileResponse]:
+    folder_id = _google_drive_folder_id(payload.folder_reference)
+    credentials = await _load_google_drive_credentials(request)
+    try:
+        files = await run_in_threadpool(list_google_drive_folder_files, credentials, folder_id)
+    except GoogleDriveConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_google_drive_file_response(file) for file in files]
+
+
+@app.post(
+    "/api/integrations/google-drive/import",
+    response_model=GoogleDriveImportResponse,
+)
+async def import_google_drive_files(
+    payload: GoogleDriveImportRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> GoogleDriveImportResponse:
+    folder_id = _google_drive_folder_id(payload.folder_reference)
+    credentials = await _load_google_drive_credentials(request)
+    try:
+        available_files = await run_in_threadpool(
+            list_google_drive_folder_files,
+            credentials,
+            folder_id,
+            page_size=50,
+        )
+    except GoogleDriveConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    files_by_id = {file.id: file for file in available_files}
+    selected_ids = list(dict.fromkeys(file_id.strip() for file_id in payload.file_ids))
+    selected_files = [files_by_id[file_id] for file_id in selected_ids if file_id in files_by_id]
+    if len(selected_files) != len(selected_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Um ou mais arquivos não pertencem à pasta selecionada "
+                "ou não estão mais disponíveis."
+            ),
+        )
+
+    imported_documents: list[DocumentResponse] = []
+    failures: list[GoogleDriveImportFailure] = []
+    for drive_file in selected_files:
+        try:
+            downloaded_file = await run_in_threadpool(
+                download_google_drive_file,
+                credentials,
+                drive_file,
+            )
+            document, _original_file_available = await _persist_uploaded_document(
+                request,
+                UploadedDocument(
+                    filename=downloaded_file.filename,
+                    content_type=downloaded_file.content_type,
+                    content=downloaded_file.content,
+                ),
+                source_metadata={
+                    "source_provider": "google_drive",
+                    "source_file_id": drive_file.id,
+                    "source_web_view_link": drive_file.web_view_link,
+                },
+            )
+            imported_documents.append(document)
+        except HTTPException as exc:
+            failures.append(
+                GoogleDriveImportFailure(filename=drive_file.name, detail=str(exc.detail))
+            )
+        except (
+            DocumentProcessingError,
+            DocumentPersistenceError,
+            DocumentStorageError,
+            GoogleDriveConnectorError,
+        ) as exc:
+            failures.append(GoogleDriveImportFailure(filename=drive_file.name, detail=str(exc)))
+
+    message = (
+        f"{len(imported_documents)} arquivo(s) importado(s) do Google Drive."
+        if imported_documents
+        else "Nenhum arquivo do Google Drive foi importado."
+    )
+    return GoogleDriveImportResponse(
+        imported_documents=imported_documents,
+        failures=failures,
+        message=message,
+    )
 
 
 @app.get("/api/studio/documents", response_model=list[StudioDocumentResponse])
@@ -440,55 +748,10 @@ async def create_document(
     request: AuthenticatedRequest = _authenticated_request,
 ) -> DocumentUploadResponse:
     upload = await _read_uploaded_document(file)
-
-    try:
-        parsed_document = await run_in_threadpool(_parse_document, request, upload)
-    except (DocumentProcessingError, AudioTranscriptionError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
-
-    try:
-        saved_document = await run_in_threadpool(
-            save_parsed_document,
-            request.client,
-            request.user.id,
-            parsed_document,
-        )
-    except DocumentPersistenceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
-        ) from exc
-
-    original_file_available = False
-    document_id = saved_document.get("id")
-    if isinstance(document_id, str) and document_id:
-        try:
-            stored_file = await run_in_threadpool(
-                upload_original_document,
-                request.client,
-                request.user.id,
-                document_id,
-                upload,
-            )
-            await run_in_threadpool(
-                update_document_storage_location,
-                request.client,
-                request.user.id,
-                document_id,
-                stored_file.bucket,
-                stored_file.path,
-            )
-            saved_document["storage_bucket"] = stored_file.bucket
-            saved_document["storage_path"] = stored_file.path
-            original_file_available = True
-        except (DocumentPersistenceError, DocumentStorageError):
-            original_file_available = False
+    document, original_file_available = await _persist_uploaded_document(request, upload)
 
     return DocumentUploadResponse(
-        document=_document_response(saved_document, original_file_available),
+        document=document,
         message=(
             "Documento processado e salvo com download privado disponível."
             if original_file_available
@@ -567,6 +830,127 @@ async def ask_copilot(
     return CopilotResponse(answer=answer, model=model)
 
 
+def _google_drive_status(request: AuthenticatedRequest) -> IntegrationStatusResponse:
+    if not _google_drive_is_configured(request):
+        return IntegrationStatusResponse(
+            provider="google_drive",
+            label="Google Drive",
+            availability="needs_configuration",
+            detail=(
+                "O Google Drive precisa concluir a configuração segura do servidor "
+                "antes da conexão."
+            ),
+        )
+    return IntegrationStatusResponse(
+        provider="google_drive",
+        label="Google Drive",
+        availability="available",
+        detail="Conecte uma conta para buscar e importar arquivos de uma pasta autorizada.",
+    )
+
+
+def _google_drive_is_configured(request: AuthenticatedRequest) -> bool:
+    settings = request.config.google_drive
+    return bool(
+        settings.client_id.strip()
+        and settings.client_secret.strip()
+        and settings.redirect_uri.strip()
+        and connector_encryption_key()
+    )
+
+
+def _build_google_drive_oauth_state(request: AuthenticatedRequest) -> str:
+    """Create an opaque OAuth state that cannot be reused by another Synapse account."""
+    try:
+        return encrypt_integration_credentials(
+            {"provider": "google_drive", "user_id": request.user.id},
+            connector_encryption_key(),
+        )
+    except IntegrationCredentialError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Não foi possível preparar a conexão segura com o Google Drive.",
+        ) from exc
+
+
+def _validate_google_drive_oauth_state(
+    oauth_state: str,
+    request: AuthenticatedRequest,
+) -> None:
+    """Reject OAuth callbacks not minted for the account that is completing them."""
+    try:
+        state_payload = decrypt_integration_credentials(oauth_state, connector_encryption_key())
+    except IntegrationCredentialError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O retorno do Google Drive não corresponde a uma conexão válida.",
+        ) from exc
+
+    if (
+        state_payload.get("provider") != "google_drive"
+        or state_payload.get("user_id") != request.user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O retorno do Google Drive pertence a outra conta.",
+        )
+
+
+def _require_google_drive_configuration(request: AuthenticatedRequest) -> None:
+    if not _google_drive_is_configured(request):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "O Google Drive ainda não foi configurado no servidor. "
+                "Finalize as credenciais OAuth, o endereço de retorno e a chave de proteção."
+            ),
+        )
+
+
+async def _load_google_drive_credentials(
+    request: AuthenticatedRequest,
+):
+    _require_google_drive_configuration(request)
+    try:
+        return await run_in_threadpool(
+            load_google_drive_credentials,
+            request.client,
+            request.user.id,
+            connector_encryption_key(),
+            request.config.google_drive.client_id,
+            request.config.google_drive.client_secret,
+        )
+    except (
+        GoogleDriveConnectionError,
+        IntegrationConnectionError,
+        IntegrationCredentialError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+def _google_drive_folder_id(folder_reference: str) -> str:
+    try:
+        return extract_google_drive_folder_id(folder_reference)
+    except GoogleDriveConnectorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+def _google_drive_file_response(file: GoogleDriveFile) -> GoogleDriveFileResponse:
+    return GoogleDriveFileResponse(
+        id=file.id,
+        name=file.name,
+        mime_type=file.mime_type,
+        size_bytes=file.size_bytes,
+        web_view_link=file.web_view_link or None,
+    )
+
+
 def _parse_document(request: AuthenticatedRequest, upload: UploadedDocument) -> ParsedDocument:
     if not is_audio_document(upload.filename):
         return parse_uploaded_document(upload)
@@ -581,6 +965,68 @@ def _parse_document(request: AuthenticatedRequest, upload: UploadedDocument) -> 
         transcription,
         request.config.openai.transcription_model,
     )
+
+
+async def _persist_uploaded_document(
+    request: AuthenticatedRequest,
+    upload: UploadedDocument,
+    *,
+    source_metadata: dict[str, Any] | None = None,
+) -> tuple[DocumentResponse, bool]:
+    """Persist local or connector content through one identical extraction pipeline."""
+    try:
+        parsed_document = await run_in_threadpool(_parse_document, request, upload)
+    except (DocumentProcessingError, AudioTranscriptionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    if source_metadata:
+        parsed_document = replace(
+            parsed_document,
+            metadata={**parsed_document.metadata, **source_metadata},
+        )
+
+    try:
+        saved_document = await run_in_threadpool(
+            save_parsed_document,
+            request.client,
+            request.user.id,
+            parsed_document,
+        )
+    except DocumentPersistenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    original_file_available = False
+    document_id = saved_document.get("id")
+    if isinstance(document_id, str) and document_id:
+        try:
+            stored_file = await run_in_threadpool(
+                upload_original_document,
+                request.client,
+                request.user.id,
+                document_id,
+                upload,
+            )
+            await run_in_threadpool(
+                update_document_storage_location,
+                request.client,
+                request.user.id,
+                document_id,
+                stored_file.bucket,
+                stored_file.path,
+            )
+            saved_document["storage_bucket"] = stored_file.bucket
+            saved_document["storage_path"] = stored_file.path
+            original_file_available = True
+        except (DocumentPersistenceError, DocumentStorageError):
+            original_file_available = False
+
+    return _document_response(saved_document, original_file_available), original_file_available
 
 
 async def _read_uploaded_document(file: UploadFile) -> UploadedDocument:

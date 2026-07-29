@@ -1,0 +1,29 @@
+name: Keep Synapse API Awake
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: synapse-api-keep-alive
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Consultar a saúde da API
+        env:
+          HEALTHCHECK_URL: ${{ vars.SYNAPSE_HEALTHCHECK_URL }}
+        run: |
+          if [ -z "$HEALTHCHECK_URL" ]; then
+            echo "Defina a variável SYNAPSE_HEALTHCHECK_URL com a URL /health do Render."
+            exit 1
+          fi
+
+          response="$(curl --fail --silent --show-error --location --max-time 90 --retry 1 "$HEALTHCHECK_URL")"
+          test "$(printf '%s' "$response" | jq -r '.status')" = "ok"

@@ -14,6 +14,7 @@ import {
 } from "@/services/api";
 
 const acceptedFormats = ".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.vtt,.eml,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,.ogg";
+const maxUploadSizeBytes = 10 * 1024 * 1024;
 
 export default function UploadPage() {
   const { session } = useSynapseSession();
@@ -70,6 +71,21 @@ export default function UploadPage() {
     }
   }
 
+  function handleFileSelection(file: File | null) {
+    setMessage(null);
+    if (file !== null && file.size > maxUploadSizeBytes) {
+      setSelectedFile(null);
+      setError("O arquivo excede o limite de 10 MB desta fase.");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
+    setError(null);
+    setSelectedFile(file);
+  }
+
   async function handleDownload(document: SynapseDocument) {
     try {
       setError(null);
@@ -100,7 +116,7 @@ export default function UploadPage() {
             <input
               accept={acceptedFormats}
               className="mt-6 block w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-bold file:text-blue-700"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => handleFileSelection(event.target.files?.[0] ?? null)}
               ref={fileInputRef}
               type="file"
             />

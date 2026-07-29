@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "node --use-system-ca ./node_modules/@playwright/test/cli.js test",
+    "test:e2e:headed": "node --use-system-ca ./node_modules/@playwright/test/cli.js test --headed",
+    "test:e2e:report": "node ./node_modules/@playwright/test/cli.js show-report"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
@@ -17,10 +20,12 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.62.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.0.0",
     "postcss": "^8.5.18",

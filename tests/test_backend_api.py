@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import backend.main as backend_main
 from backend.auth import AuthenticatedRequest
 from fastapi.testclient import TestClient
@@ -70,6 +72,31 @@ def test_document_routes_require_an_authenticated_session() -> None:
     response = client.get("/api/documents")
 
     assert response.status_code == 401
+
+
+def test_uploaded_document_rejects_content_above_the_limit() -> None:
+    class LargeUpload:
+        filename = "grande.txt"
+        content_type = "text/plain"
+        was_closed = False
+
+        async def read(self, size: int) -> bytes:
+            return b"a" * size
+
+        async def close(self) -> None:
+            self.was_closed = True
+
+    upload = LargeUpload()
+
+    try:
+        asyncio.run(backend_main._read_uploaded_document(upload))
+    except backend_main.HTTPException as exc:
+        assert exc.status_code == 413
+        assert exc.detail == "O arquivo excede o limite de 10 MB desta fase."
+    else:
+        raise AssertionError("O upload acima do limite deveria ser rejeitado.")
+
+    assert upload.was_closed is True
 
 
 def test_copilot_route_returns_json(monkeypatch) -> None:

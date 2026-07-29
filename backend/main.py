@@ -23,6 +23,7 @@ from synapse_ai.services.document_repository import (
     update_document_storage_location,
 )
 from synapse_ai.services.document_service import (
+    MAX_UPLOAD_SIZE_BYTES,
     DocumentProcessingError,
     ParsedDocument,
     UploadedDocument,
@@ -137,12 +138,7 @@ async def create_document(
     file: UploadFile = _uploaded_file,
     request: AuthenticatedRequest = _authenticated_request,
 ) -> DocumentUploadResponse:
-    upload = UploadedDocument(
-        filename=file.filename or "documento",
-        content_type=file.content_type or "application/octet-stream",
-        content=await file.read(),
-    )
-    await file.close()
+    upload = await _read_uploaded_document(file)
 
     try:
         parsed_document = await run_in_threadpool(_parse_document, request, upload)
@@ -283,6 +279,22 @@ def _parse_document(request: AuthenticatedRequest, upload: UploadedDocument) -> 
         upload,
         transcription,
         request.config.openai.transcription_model,
+    )
+
+
+async def _read_uploaded_document(file: UploadFile) -> UploadedDocument:
+    """Lê somente o necessário para aplicar o limite documentado de upload."""
+    content = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+    await file.close()
+    if len(content) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="O arquivo excede o limite de 10 MB desta fase.",
+        )
+    return UploadedDocument(
+        filename=file.filename or "documento",
+        content_type=file.content_type or "application/octet-stream",
+        content=content,
     )
 
 

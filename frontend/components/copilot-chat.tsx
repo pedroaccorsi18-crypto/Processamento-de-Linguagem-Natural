@@ -99,6 +99,8 @@ export function CopilotChat() {
           <div className="max-h-80 space-y-3 overflow-y-auto bg-slate-50 px-5 py-4">
             {visibleMessages.map((message, index) => (
               <div
+                data-role={message.role}
+                data-testid="copilot-message"
                 className={
                   message.role === "user"
                     ? "ml-8 rounded-2xl bg-synapse-blue px-4 py-3 text-sm leading-6 text-white"

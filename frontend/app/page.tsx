@@ -22,14 +22,6 @@ export default function HomePage() {
           <p className="text-xs font-black uppercase tracking-[0.18em] text-synapse-blue">
             Inteligência organizacional com evidências
           </p>
-          <Image
-            alt="Símbolo do Synapse AI"
-            className="mt-6 h-16 w-16 object-contain"
-            height={64}
-            priority
-            src="/brand/synapse-mark.png"
-            width={64}
-          />
           <h1 className="mt-5 text-4xl font-black leading-tight tracking-tight text-ink sm:text-5xl">
             Transforme dados ocultos em decisões que podem ser verificadas.
           </h1>

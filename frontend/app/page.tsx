@@ -17,7 +17,7 @@ export default function HomePage() {
         </Link>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-12 px-5 pb-20 pt-12 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-12 lg:pb-28 lg:pt-20">
+      <section className="mx-auto grid max-w-7xl gap-10 px-5 pb-12 pt-6 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-12 lg:pb-14 lg:pt-10">
         <div className="flex max-w-2xl flex-col justify-center">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-synapse-blue">
             Inteligência organizacional com evidências
@@ -30,7 +30,7 @@ export default function HomePage() {
             src="/brand/synapse-mark.png"
             width={64}
           />
-          <h1 className="mt-5 text-4xl font-black leading-tight tracking-tight text-ink sm:text-5xl lg:text-6xl">
+          <h1 className="mt-5 text-4xl font-black leading-tight tracking-tight text-ink sm:text-5xl">
             Transforme dados ocultos em decisões que podem ser verificadas.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-ink-soft">
@@ -56,7 +56,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="relative min-h-[360px] sm:min-h-[420px]">
+        <div className="relative min-h-[340px] sm:min-h-[380px]">
           <div className="absolute inset-0 rounded-2xl bg-ink p-5 shadow-2xl shadow-slate-300/60 sm:p-7">
             <div className="flex items-center justify-between border-b border-white/10 pb-5">
               <div>

@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 import type { Session, User } from "@supabase/supabase-js";
 
 import {
@@ -113,7 +114,7 @@ function ConfigurationRequired() {
 }
 
 function SignInCard() {
-  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
+  const [mode, setMode] = useState<"signIn" | "signUp" | "reset">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,9 +128,13 @@ function SignInCard() {
 
     const client = getSupabaseBrowserClient();
     const result =
-      mode === "signIn"
-        ? await client.auth.signInWithPassword({ email, password })
-        : await client.auth.signUp({ email, password });
+      mode === "reset"
+        ? await client.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`,
+          })
+        : mode === "signIn"
+          ? await client.auth.signInWithPassword({ email, password })
+          : await client.auth.signUp({ email, password });
 
     setIsSubmitting(false);
     if (result.error) {
@@ -140,7 +145,9 @@ function SignInCard() {
 
     setIsError(false);
     setMessage(
-      mode === "signUp"
+      mode === "reset"
+        ? "Enviamos um link para redefinir sua senha. Verifique sua caixa de entrada."
+        : mode === "signUp"
         ? "Conta criada. Confirme seu e-mail para concluir o acesso."
         : "Acesso confirmado.",
     );
@@ -149,9 +156,16 @@ function SignInCard() {
   return (
     <main className="grid min-h-screen place-items-center bg-surface-subtle px-5 py-10">
       <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-soft-card">
-        <p className="text-2xl font-black text-ink">Synapse AI</p>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-2xl font-black text-ink">Synapse AI</p>
+          <Link className="text-sm font-bold text-ink-soft hover:text-synapse-blue" href="/">
+            Voltar ao início
+          </Link>
+        </div>
         <p className="mt-2 text-sm leading-6 text-ink-soft">
-          Entre para acessar sua base documental privada e as análises da sua conta.
+          {mode === "reset"
+            ? "Informe seu e-mail para receber as instruções de recuperação de acesso."
+            : "Entre para acessar sua base documental privada e as análises da sua conta."}
         </p>
         <form className="mt-7 space-y-4" onSubmit={submit}>
           <label className="block text-sm font-bold text-ink" htmlFor="synapse-email">
@@ -166,19 +180,23 @@ function SignInCard() {
             type="email"
             value={email}
           />
-          <label className="block text-sm font-bold text-ink" htmlFor="synapse-password">
-            Senha
-          </label>
-          <input
-            autoComplete={mode === "signIn" ? "current-password" : "new-password"}
-            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-ink outline-none focus:border-synapse-blue focus:ring-4 focus:ring-blue-100"
-            id="synapse-password"
-            minLength={8}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            type="password"
-            value={password}
-          />
+          {mode !== "reset" ? (
+            <>
+              <label className="block text-sm font-bold text-ink" htmlFor="synapse-password">
+                Senha
+              </label>
+              <input
+                autoComplete={mode === "signIn" ? "current-password" : "new-password"}
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-ink outline-none focus:border-synapse-blue focus:ring-4 focus:ring-blue-100"
+                id="synapse-password"
+                minLength={8}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+            </>
+          ) : null}
           {message ? (
             <p className={isError ? "text-sm text-red-700" : "text-sm text-emerald-700"}>
               {message}
@@ -189,19 +207,53 @@ function SignInCard() {
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Aguarde..." : mode === "signIn" ? "Entrar" : "Criar conta"}
+            {isSubmitting
+              ? "Aguarde..."
+              : mode === "reset"
+                ? "Enviar link de recuperação"
+                : mode === "signIn"
+                  ? "Entrar"
+                  : "Criar conta"}
           </button>
         </form>
-        <button
-          className="mt-5 text-sm font-bold text-synapse-blue hover:text-blue-800"
-          onClick={() => {
-            setMode((current) => (current === "signIn" ? "signUp" : "signIn"));
-            setMessage(null);
-          }}
-          type="button"
-        >
-          {mode === "signIn" ? "Criar uma conta" : "Já tenho uma conta"}
-        </button>
+        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-3">
+          {mode !== "reset" ? (
+            <button
+              className="text-sm font-bold text-synapse-blue hover:text-blue-800"
+              onClick={() => {
+                setMode((current) => (current === "signIn" ? "signUp" : "signIn"));
+                setMessage(null);
+              }}
+              type="button"
+            >
+              {mode === "signIn" ? "Criar uma conta" : "Já tenho uma conta"}
+            </button>
+          ) : null}
+          {mode === "signIn" ? (
+            <button
+              className="text-sm font-bold text-ink-soft hover:text-synapse-blue"
+              onClick={() => {
+                setMode("reset");
+                setMessage(null);
+              }}
+              type="button"
+            >
+              Esqueci minha senha
+            </button>
+          ) : null}
+          {mode === "reset" ? (
+            <button
+              className="text-sm font-bold text-ink-soft hover:text-synapse-blue"
+              onClick={() => {
+                setMode("signIn");
+                setMessage(null);
+              }}
+              type="button"
+            >
+              Voltar para entrar
+            </button>
+          ) : null}
+        </div>
       </section>
     </main>
   );

@@ -22,7 +22,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     pathname === "/" ||
     pathname === "/about" ||
     pathname === "/privacy" ||
-    pathname === "/terms"
+    pathname === "/terms" ||
+    pathname === "/reset-password"
   ) {
     return <div className="min-h-screen bg-surface-subtle">{children}</div>;
   }

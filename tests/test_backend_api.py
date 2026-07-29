@@ -280,6 +280,111 @@ def test_copilot_route_returns_json(monkeypatch) -> None:
     assert kwargs["current_area"] == "Dashboard"
 
 
+def test_copilot_route_enriches_context_with_selected_document_scope(monkeypatch) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_generate_copilot_answer(*args, **kwargs) -> str:
+        observed["kwargs"] = kwargs
+        return "Resposta contextual"
+
+    def fake_match_chunks(*args, **kwargs) -> list[dict[str, object]]:
+        observed["match_args"] = args
+        return [
+            {
+                "document_id": "document-1",
+                "filename": "ata.pdf",
+                "chunk_index": 0,
+                "content": "Ana Ribeiro aprovou o cronograma em 03/07/2026.",
+                "similarity": 0.92,
+                "metadata": {
+                    "entities": [
+                        {"text": "Ana Ribeiro", "label": "PESSOA"},
+                        {"text": "03/07/2026", "label": "DATA"},
+                    ]
+                },
+            }
+        ]
+
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _authenticated_request
+    )
+    monkeypatch.setattr(backend_main, "OpenAI", lambda api_key: object())
+    monkeypatch.setattr(backend_main, "generate_embeddings", lambda *_args: [[0.1, 0.2]])
+    monkeypatch.setattr(backend_main, "match_document_chunks", fake_match_chunks)
+    monkeypatch.setattr(backend_main, "_generate_copilot_answer", fake_generate_copilot_answer)
+    client = TestClient(backend_main.app)
+
+    try:
+        response = client.post(
+            "/api/copilot",
+            json={
+                "messages": [{"role": "user", "content": "Quem aprovou o cronograma?"}],
+                "current_area": "Estúdio de IA",
+                "context": "Página atual: Estúdio de IA.",
+                "document_id": "document-1",
+            },
+        )
+    finally:
+        backend_main.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    kwargs = observed["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert "ata.pdf" in kwargs["context_snapshot"]
+    assert "Ana Ribeiro (PESSOA)" in kwargs["context_snapshot"]
+    assert observed["match_args"][3] == ["document-1"]
+
+
+def test_context_precision_endpoint_measures_retrieval_quality(monkeypatch) -> None:
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _authenticated_request
+    )
+    monkeypatch.setattr(backend_main, "OpenAI", lambda api_key: object())
+    monkeypatch.setattr(backend_main, "generate_embeddings", lambda *_args: [[0.1, 0.2]])
+    monkeypatch.setattr(
+        backend_main,
+        "match_document_chunks",
+        lambda *_args: [
+            {
+                "document_id": "document-1",
+                "filename": "ata.pdf",
+                "chunk_index": 0,
+                "content": "O orçamento foi aprovado por Fernanda Lima.",
+                "similarity": 0.91,
+            },
+            {
+                "document_id": "document-2",
+                "filename": "contrato.pdf",
+                "chunk_index": 1,
+                "content": "O contrato ainda está em revisão.",
+                "similarity": 0.64,
+            },
+        ],
+    )
+    client = TestClient(backend_main.app)
+
+    try:
+        response = client.post(
+            "/api/evaluation/context-precision",
+            json={
+                "query": "Quem aprovou o orçamento?",
+                "selected_document_ids": ["document-1"],
+                "expected_document_id": "document-1",
+                "expected_terms": ["orçamento"],
+                "limit": 2,
+            },
+        )
+    finally:
+        backend_main.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["retrieved_count"] == 2
+    assert payload["relevant_count"] == 1
+    assert payload["context_precision"] == 0.5
+    assert payload["matches"][0]["matched_terms"] == ["orçamento"]
+
+
 def test_studio_documents_returns_only_authenticated_documents(monkeypatch) -> None:
     backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
         _authenticated_request

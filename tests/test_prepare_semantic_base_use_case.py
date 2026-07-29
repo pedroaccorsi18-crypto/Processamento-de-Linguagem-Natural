@@ -89,6 +89,10 @@ def test_prepare_semantic_base_use_case_succeeds_with_one_document() -> None:
     assert deps.replacer_calls[0]["document_id"] == "doc-1"
     assert deps.replacer_calls[0]["filename"] == "ata.pdf"
     assert deps.replacer_calls[0]["embedding_model"] == "text-embedding-3-small"
+    assert deps.replacer_calls[0]["chunks"][0].metadata == {
+        "entities": [],
+        "entity_labels": [],
+    }
     assert deps.events == [
         "chunk:Ata",
         "embed:Ata - parte 1,Ata - parte 2",

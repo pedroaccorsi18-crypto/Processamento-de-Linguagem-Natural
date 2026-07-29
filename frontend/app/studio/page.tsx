@@ -29,28 +29,6 @@ type WorkflowDefinition = {
 
 const workflows: WorkflowDefinition[] = [
   {
-    id: "ask",
-    label: "Perguntar com fontes",
-    description: "Responde uma pergunta sobre o escopo e aponta as evidências recuperadas.",
-    minimumDocuments: 1,
-    needsQuestion: true,
-    actionLabel: "Gerar resposta com fontes",
-  },
-  {
-    id: "intelligence_snapshot",
-    label: "Inteligência organizacional",
-    description: "Consolida decisões, riscos, pendências e recomendações estratégicas.",
-    minimumDocuments: 1,
-    actionLabel: "Gerar inteligência organizacional",
-  },
-  {
-    id: "document_comparison",
-    label: "Comparação documental",
-    description: "Identifica divergências de datas, responsáveis, riscos e escopo.",
-    minimumDocuments: 2,
-    actionLabel: "Comparar documentos",
-  },
-  {
     id: "action_plan",
     label: "Plano de ação",
     description: "Transforma decisões, riscos e pendências em ações acompanháveis.",
@@ -71,20 +49,6 @@ const workflows: WorkflowDefinition[] = [
     minimumDocuments: 1,
     actionLabel: "Gerar alertas preventivos",
   },
-  {
-    id: "historical_patterns",
-    label: "Padrões históricos",
-    description: "Cruza o escopo com análises salvas para reconhecer recorrências.",
-    minimumDocuments: 1,
-    actionLabel: "Reconhecer padrões históricos",
-  },
-  {
-    id: "multi_agent",
-    label: "Orquestração multiagente",
-    description: "Combina perspectivas de decisão, risco, governança e consistência documental.",
-    minimumDocuments: 1,
-    actionLabel: "Executar agentes especializados",
-  },
 ];
 
 export default function StudioPage() {
@@ -92,7 +56,7 @@ export default function StudioPage() {
   const [documents, setDocuments] = useState<StudioDocument[]>([]);
   const [history, setHistory] = useState<StudioHistoryEntry[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-  const [workflow, setWorkflow] = useState<StudioWorkflow>("ask");
+  const [workflow, setWorkflow] = useState<StudioWorkflow>("action_plan");
   const [question, setQuestion] = useState("");
   const [saveToHistory, setSaveToHistory] = useState(true);
   const [lastAnalysis, setLastAnalysis] = useState<StudioAnalysisResponse | null>(null);
@@ -147,6 +111,13 @@ export default function StudioPage() {
         : [...currentSelection, documentId],
     );
   }
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "synapse:studio:selectedDocumentIds",
+      JSON.stringify(selectedDocumentIds),
+    );
+  }, [selectedDocumentIds]);
 
   async function handlePrepare() {
     if (selectedDocumentIds.length === 0) {
@@ -218,7 +189,7 @@ export default function StudioPage() {
       <PageHeader
         eyebrow="Inteligência aplicada"
         title="Estúdio de IA"
-        description="Defina um escopo privado, prepare a busca semântica e gere análises rastreáveis sem misturar assuntos diferentes."
+        description="Defina um escopo privado, prepare a busca semântica e gere os três fluxos centrais de PLN: plano de ação, sentimentos e alertas preventivos."
       />
 
       {error ? (

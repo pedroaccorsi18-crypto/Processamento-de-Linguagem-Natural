@@ -42,11 +42,12 @@ from synapse_ai.application.studio_factory import (
     build_sentiment_analysis_use_case,
 )
 from synapse_ai.services.analysis_repository import list_recent_analyses
+from synapse_ai.services.analysis_service import SourceSnippet, build_source_snippets
 from synapse_ai.services.audio_transcription_service import (
     AudioTranscriptionError,
     transcribe_audio,
 )
-from synapse_ai.services.chunk_repository import list_document_chunk_counts
+from synapse_ai.services.chunk_repository import list_document_chunk_counts, match_document_chunks
 from synapse_ai.services.document_repository import (
     DocumentPersistenceError,
     get_user_document,
@@ -69,6 +70,7 @@ from synapse_ai.services.document_storage import (
     download_original_document,
     upload_original_document,
 )
+from synapse_ai.services.embedding_service import generate_embeddings
 from synapse_ai.services.google_drive_connection_service import (
     GoogleDriveConnectionError,
     disconnect_google_drive,
@@ -167,6 +169,9 @@ class CopilotRequest(BaseModel):
     prompt: str | None = Field(default=None, max_length=12000)
     messages: list[CopilotMessagePayload] = Field(default_factory=list)
     current_area: str = Field(default="API REST", max_length=120)
+    current_path: str | None = Field(default=None, max_length=240)
+    document_id: str | None = Field(default=None, max_length=128)
+    document_ids: list[str] = Field(default_factory=list, max_length=10)
     context: str | None = Field(default=None, max_length=20000)
     model: str | None = Field(default=None, max_length=120)
 
@@ -174,6 +179,30 @@ class CopilotRequest(BaseModel):
 class CopilotResponse(BaseModel):
     answer: str
     model: str
+
+
+class ContextPrecisionRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=12000)
+    selected_document_ids: list[str] = Field(default_factory=list, max_length=20)
+    expected_document_id: str | None = Field(default=None, max_length=128)
+    expected_terms: list[str] = Field(default_factory=list, max_length=20)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class ContextPrecisionMatch(BaseModel):
+    document_id: str
+    filename: str
+    chunk_index: int
+    similarity: float
+    relevant: bool
+    matched_terms: list[str] = Field(default_factory=list)
+
+
+class ContextPrecisionResponse(BaseModel):
+    retrieved_count: int
+    relevant_count: int
+    context_precision: float
+    matches: list[ContextPrecisionMatch] = Field(default_factory=list)
 
 
 class DashboardStatsResponse(BaseModel):
@@ -1371,17 +1400,168 @@ async def ask_copilot(
 
     model = payload.model or request.config.openai.generation_model
     openai_client = OpenAI(api_key=request.config.openai.api_key)
+    context_snapshot = await _copilot_context_snapshot(payload, request, openai_client)
     answer = await run_in_threadpool(
         _generate_copilot_answer,
         request.config,
         messages,
         api_key=request.config.openai.api_key,
         model=model,
-        context_snapshot=payload.context or "Nenhum contexto documental enviado pela API.",
+        context_snapshot=context_snapshot,
         current_area=payload.current_area,
         openai_client=openai_client,
     )
     return CopilotResponse(answer=answer, model=model)
+
+
+@app.post("/api/evaluation/context-precision", response_model=ContextPrecisionResponse)
+async def evaluate_context_precision(
+    payload: ContextPrecisionRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> ContextPrecisionResponse:
+    """Measure whether semantic retrieval returns the expected context before generation."""
+    selected_document_ids = _clean_document_ids(payload.selected_document_ids)
+    expected_document_id = (payload.expected_document_id or "").strip()
+    expected_terms = [term.strip().casefold() for term in payload.expected_terms if term.strip()]
+
+    openai_client = OpenAI(api_key=request.config.openai.api_key)
+    query_embedding = await run_in_threadpool(
+        _generate_query_embedding,
+        openai_client,
+        payload.query,
+        request.config.openai.embedding_model,
+    )
+    matches = await run_in_threadpool(
+        match_document_chunks,
+        request.client,
+        request.user.id,
+        query_embedding,
+        selected_document_ids or None,
+        payload.limit,
+    )
+
+    evaluated_matches: list[ContextPrecisionMatch] = []
+    for match in matches:
+        content = str(match.get("content") or "")
+        matched_terms = [term for term in expected_terms if term in content.casefold()]
+        same_document = not expected_document_id or match.get("document_id") == expected_document_id
+        term_relevance = not expected_terms or bool(matched_terms)
+        relevant = same_document and term_relevance
+        evaluated_matches.append(
+            ContextPrecisionMatch(
+                document_id=str(match.get("document_id") or ""),
+                filename=str(match.get("filename") or "Documento sem nome"),
+                chunk_index=_optional_int(match.get("chunk_index")) or 0,
+                similarity=float(match.get("similarity") or 0),
+                relevant=relevant,
+                matched_terms=matched_terms,
+            )
+        )
+
+    retrieved_count = len(evaluated_matches)
+    relevant_count = sum(1 for match in evaluated_matches if match.relevant)
+    context_precision = relevant_count / retrieved_count if retrieved_count else 0.0
+    return ContextPrecisionResponse(
+        retrieved_count=retrieved_count,
+        relevant_count=relevant_count,
+        context_precision=round(context_precision, 4),
+        matches=evaluated_matches,
+    )
+
+
+async def _copilot_context_snapshot(
+    payload: CopilotRequest,
+    request: AuthenticatedRequest,
+    openai_client: OpenAI,
+) -> str:
+    base_context = payload.context or "Nenhum contexto documental enviado pela API."
+    latest_prompt = _latest_copilot_prompt(payload)
+    scoped_document_ids = _copilot_document_scope(payload)
+    if not latest_prompt or not scoped_document_ids:
+        return base_context
+
+    try:
+        query_embedding = await run_in_threadpool(
+            _generate_query_embedding,
+            openai_client,
+            latest_prompt,
+            request.config.openai.embedding_model,
+        )
+        matches = await run_in_threadpool(
+            match_document_chunks,
+            request.client,
+            request.user.id,
+            query_embedding,
+            scoped_document_ids,
+            5,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Copilot scoped retrieval failed: %s", exc.__class__.__name__)
+        return base_context
+
+    sources = build_source_snippets(matches)
+    if not sources:
+        return (
+            f"{base_context}\n\n"
+            "Contexto documental recuperado para o Copiloto: nenhum trecho encontrado "
+            "no escopo selecionado."
+        )
+
+    return (
+        f"{base_context}\n\n"
+        "Contexto documental recuperado para o Copiloto:\n"
+        f"{_format_copilot_sources(sources)}"
+    )
+
+
+def _latest_copilot_prompt(payload: CopilotRequest) -> str:
+    if payload.prompt and payload.prompt.strip():
+        return payload.prompt.strip()
+    for message in reversed(payload.messages):
+        if message.role == "user" and message.content.strip():
+            return message.content.strip()
+    return ""
+
+
+def _copilot_document_scope(payload: CopilotRequest) -> list[str]:
+    document_ids = [payload.document_id or "", *payload.document_ids]
+    return _clean_document_ids(document_ids)[:10]
+
+
+def _clean_document_ids(document_ids: list[str]) -> list[str]:
+    return list(dict.fromkeys(document_id.strip() for document_id in document_ids if document_id))
+
+
+def _generate_query_embedding(
+    openai_client: OpenAI,
+    query: str,
+    embedding_model: str,
+) -> list[float]:
+    embeddings = generate_embeddings(openai_client, [query], embedding_model)
+    return embeddings[0] if embeddings else []
+
+
+def _format_copilot_sources(sources: list[SourceSnippet]) -> str:
+    lines: list[str] = []
+    for index, source in enumerate(sources, start=1):
+        entities = source.metadata.get("entities")
+        entity_text = ""
+        if isinstance(entities, list) and entities:
+            formatted_entities = []
+            for entity in entities[:8]:
+                if not isinstance(entity, dict):
+                    continue
+                text = str(entity.get("text") or "").strip()
+                label = str(entity.get("label") or "").strip()
+                if text and label:
+                    formatted_entities.append(f"{text} ({label})")
+            if formatted_entities:
+                entity_text = f"\nEntidades NER: {', '.join(formatted_entities)}"
+        lines.append(
+            f"[Fonte {index}] {source.filename} | trecho {source.chunk_index} | "
+            f"similaridade {source.similarity:.4f}\n{source.content[:1200]}{entity_text}"
+        )
+    return "\n\n".join(lines)
 
 
 def _slack_status(request: AuthenticatedRequest) -> IntegrationStatusResponse:

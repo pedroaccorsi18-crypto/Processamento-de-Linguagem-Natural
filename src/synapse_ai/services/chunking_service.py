@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 DEFAULT_CHUNK_SIZE_CHARS = 1800
 DEFAULT_CHUNK_OVERLAP_CHARS = 250
@@ -11,6 +12,7 @@ class TextChunk:
     index: int
     content: str
     char_count: int
+    metadata: dict[str, Any] | None = None
 
 
 class ChunkingError(ValueError):

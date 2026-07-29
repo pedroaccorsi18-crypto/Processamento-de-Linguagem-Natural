@@ -36,7 +36,7 @@ def replace_document_chunks(
             "content_char_count": chunk.char_count,
             "embedding": embedding,
             "embedding_model": embedding_model,
-            "metadata": {"filename": filename},
+            "metadata": {"filename": filename, **(chunk.metadata or {})},
         }
         for chunk, embedding in zip(chunks, embeddings, strict=True)
     ]

@@ -10,7 +10,9 @@ from synapse_ai.application.interfaces import (
 )
 from synapse_ai.application.result import ResultSeverity, UseCaseResult
 from synapse_ai.services.chunk_repository import ChunkPersistenceError
+from synapse_ai.services.chunking_service import TextChunk
 from synapse_ai.services.embedding_service import EmbeddingGenerationError
+from synapse_ai.services.ner_service import extract_named_entities
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,7 @@ class PrepareSemanticBaseOutput:
 
 
 class PrepareSemanticBaseUseCase:
-    """Orchestrates chunking, embedding generation and chunk replacement."""
+    """Orchestrates chunking, explicit NER, embedding generation and chunk replacement."""
 
     def __init__(
         self,
@@ -65,7 +67,7 @@ class PrepareSemanticBaseUseCase:
                 ):
                     continue
 
-                chunks = self._text_chunker(extracted_text)
+                chunks = _enrich_chunks_with_entities(self._text_chunker(extracted_text))
                 embeddings = self._embedding_generator(
                     command.openai_client,
                     [chunk.content for chunk in chunks],
@@ -90,3 +92,22 @@ def _validate_command(command: PrepareSemanticBaseCommand) -> str:
     if not command.user_id.strip():
         return "Não conseguimos confirmar sua conta nesta aba. Atualize a página para continuar."
     return ""
+
+
+def _enrich_chunks_with_entities(chunks: list[TextChunk]) -> list[TextChunk]:
+    enriched_chunks: list[TextChunk] = []
+    for chunk in chunks:
+        entities = extract_named_entities(chunk.content)
+        metadata = {**(chunk.metadata or {}), "entities": entities}
+        metadata["entity_labels"] = sorted(
+            {str(entity.get("label")) for entity in entities if entity.get("label")}
+        )
+        enriched_chunks.append(
+            TextChunk(
+                index=chunk.index,
+                content=chunk.content,
+                char_count=chunk.char_count,
+                metadata=metadata,
+            )
+        )
+    return enriched_chunks

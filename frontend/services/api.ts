@@ -262,6 +262,9 @@ export async function askCopilot(input: {
   accessToken: string;
   messages: CopilotMessagePayload[];
   currentArea: string;
+  currentPath?: string;
+  documentId?: string | null;
+  documentIds?: string[];
   context: string;
 }): Promise<CopilotResponse> {
   const response = await fetchApi("/api/copilot", input.accessToken, {
@@ -270,6 +273,9 @@ export async function askCopilot(input: {
     body: JSON.stringify({
       messages: input.messages.slice(-12),
       current_area: input.currentArea,
+      current_path: input.currentPath,
+      document_id: input.documentId,
+      document_ids: input.documentIds ?? [],
       context: input.context,
     }),
   }, COPILOT_REQUEST_TIMEOUT_MS);

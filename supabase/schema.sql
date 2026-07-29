@@ -393,6 +393,12 @@ on public.document_chunks
 using ivfflat (embedding vector_cosine_ops)
 with (lists = 100);
 
+-- PostgreSQL does not allow CREATE OR REPLACE to change a function's
+-- RETURN TABLE shape. Drop only these RPC signatures before recreating them
+-- so existing installations receive the new metadata column safely.
+drop function if exists public.match_document_chunks(uuid, vector, integer, double precision);
+drop function if exists public.match_document_chunks_in_documents(uuid, vector, uuid[], integer, double precision);
+
 create or replace function public.match_document_chunks(
   match_user_id uuid,
   query_embedding vector(1536),
@@ -404,6 +410,7 @@ returns table (
   filename text,
   chunk_index integer,
   content text,
+  metadata jsonb,
   similarity float
 )
 language sql
@@ -414,6 +421,7 @@ as $$
     d.filename,
     dc.chunk_index,
     dc.content,
+    dc.metadata,
     1 - (dc.embedding <=> query_embedding) as similarity
   from public.document_chunks dc
   join public.documents d on d.id = dc.document_id
@@ -436,6 +444,7 @@ returns table (
   filename text,
   chunk_index integer,
   content text,
+  metadata jsonb,
   similarity float
 )
 language sql
@@ -446,6 +455,7 @@ as $$
     d.filename,
     dc.chunk_index,
     dc.content,
+    dc.metadata,
     1 - (dc.embedding <=> query_embedding) as similarity
   from public.document_chunks dc
   join public.documents d on d.id = dc.document_id

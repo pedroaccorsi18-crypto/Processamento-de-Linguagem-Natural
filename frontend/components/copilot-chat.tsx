@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useSynapseSession } from "@/components/auth-gate";
 import { askCopilot, type CopilotMessagePayload } from "@/services/api";
 
@@ -12,6 +13,7 @@ const quickPrompts = [
 
 export function CopilotChat() {
   const { session } = useSynapseSession();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<CopilotMessagePayload[]>([
     {
@@ -42,12 +44,15 @@ export function CopilotChat() {
     setIsLoading(true);
 
     try {
+      const documentIds = readCurrentDocumentScope();
       const data = await askCopilot({
         accessToken: session.access_token,
         messages: nextMessages,
-        currentArea: "Frontend Next.js",
-        context:
-          "Migração SaaS B2B do Synapse AI. O frontend Next.js ainda está em esqueleto e consome a API FastAPI.",
+        currentArea: areaLabel(pathname),
+        currentPath: pathname,
+        documentId: documentIds[0] ?? null,
+        documentIds,
+        context: `Página atual: ${areaLabel(pathname)} (${pathname}).`,
       });
       setMessages((current) => [
         ...current,
@@ -84,7 +89,9 @@ export function CopilotChat() {
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <p className="text-sm font-black text-ink">Copiloto Synapse</p>
-              <p className="text-xs text-ink-soft">Conectado à API FastAPI</p>
+              <p className="text-xs text-ink-soft">
+                Contexto ativo: {areaLabel(pathname)}
+              </p>
             </div>
             <button
               aria-label="Fechar Copiloto"
@@ -158,4 +165,47 @@ export function CopilotChat() {
       </button>
     </section>
   );
+}
+
+function readCurrentDocumentScope(): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const documentId = params.get("document_id");
+  if (documentId?.trim()) {
+    return [documentId.trim()];
+  }
+
+  const storedScope = window.localStorage.getItem("synapse:studio:selectedDocumentIds");
+  if (!storedScope) {
+    return [];
+  }
+
+  try {
+    const parsedScope = JSON.parse(storedScope) as unknown;
+    if (!Array.isArray(parsedScope)) {
+      return [];
+    }
+    return parsedScope.filter((value): value is string => typeof value === "string" && !!value);
+  } catch {
+    return [];
+  }
+}
+
+function areaLabel(pathname: string): string {
+  if (pathname.startsWith("/upload")) {
+    return "Base documental";
+  }
+  if (pathname.startsWith("/studio")) {
+    return "Estúdio de IA";
+  }
+  if (pathname.startsWith("/insights")) {
+    return "Insights organizacionais";
+  }
+  if (pathname.startsWith("/audit")) {
+    return "Trilha de evidências";
+  }
+  return "Dashboard executivo";
 }

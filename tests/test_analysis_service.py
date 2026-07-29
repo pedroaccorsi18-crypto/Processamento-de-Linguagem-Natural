@@ -101,6 +101,7 @@ def test_serialize_sources_returns_json_ready_dicts() -> None:
             "filename": "ata.txt",
             "chunk_index": 1,
             "similarity": 0.75,
+            "metadata": {},
         }
     ]
 

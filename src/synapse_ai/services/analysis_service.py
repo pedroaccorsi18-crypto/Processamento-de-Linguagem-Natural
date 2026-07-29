@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import StringIO
 from typing import Any
 
@@ -23,6 +23,7 @@ class SourceSnippet:
     chunk_index: int
     content: str
     similarity: float
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def serialize_sources(sources: list[SourceSnippet]) -> list[dict[str, object]]:
             "filename": source.filename,
             "chunk_index": source.chunk_index,
             "similarity": source.similarity,
+            "metadata": source.metadata,
         }
         for source in sources
     ]
@@ -105,6 +107,7 @@ def build_source_snippets(matches: list[dict[str, Any]]) -> list[SourceSnippet]:
                 chunk_index=_as_int(match.get("chunk_index")),
                 content=content.strip(),
                 similarity=_as_float(match.get("similarity")),
+                metadata=match.get("metadata") if isinstance(match.get("metadata"), dict) else {},
             )
         )
     return snippets

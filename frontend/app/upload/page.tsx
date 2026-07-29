@@ -422,149 +422,127 @@ export default function UploadPage() {
         description="Envie arquivos da sua conta ou conecte uma fonte corporativa para extrair texto e preparar a próxima análise."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <SectionCard
-          title="Enviar arquivo"
-          description="O Synapse extrai o conteúdo, isola o documento por conta e preserva o original para download."
-        >
-          <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-            <p className="text-lg font-bold text-ink">Selecione um documento</p>
-            <p className="mt-2 text-sm leading-6 text-ink-soft">
-              PDF, DOCX, PPTX, XLSX, TXT, CSV, JSON, EML e arquivos de áudio até 10 MB.
+      <SectionCard
+        title="Enviar arquivo"
+        description="Comece por aqui. O Synapse extrai o conteúdo, isola o documento por conta e preserva o original para download."
+      >
+        <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+          <p className="text-lg font-bold text-ink">Selecione um documento</p>
+          <p className="mt-2 text-sm leading-6 text-ink-soft">
+            PDF, DOCX, PPTX, XLSX, TXT, CSV, JSON, EML e arquivos de áudio até 10 MB.
+          </p>
+          <input
+            accept={acceptedFormats}
+            className="mt-6 block w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-bold file:text-blue-700"
+            onChange={(event) => handleFileSelection(event.target.files?.[0] ?? null)}
+            ref={fileInputRef}
+            type="file"
+          />
+          {selectedFile ? (
+            <p className="mt-4 text-sm font-semibold text-ink">
+              Pronto para processar: {selectedFile.name} ({formatBytes(selectedFile.size)})
             </p>
-            <input
-              accept={acceptedFormats}
-              className="mt-6 block w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-bold file:text-blue-700"
-              onChange={(event) => handleFileSelection(event.target.files?.[0] ?? null)}
-              ref={fileInputRef}
-              type="file"
-            />
-            {selectedFile ? (
-              <p className="mt-4 text-sm font-semibold text-ink">
-                Pronto para processar: {selectedFile.name} ({formatBytes(selectedFile.size)})
-              </p>
-            ) : null}
-            <button
-              className="mt-6 rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={selectedFile === null || isUploading}
-              onClick={() => void handleUpload()}
-              type="button"
-            >
-              {isUploading ? "Extraindo e salvando..." : "Processar documento"}
-            </button>
-          </div>
-        </SectionCard>
+          ) : null}
+          <button
+            className="mt-6 rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={selectedFile === null || isUploading}
+            onClick={() => void handleUpload()}
+            type="button"
+          >
+            {isUploading ? "Extraindo e salvando..." : "Processar documento"}
+          </button>
+        </div>
+      </SectionCard>
 
-        <SectionCard
-          title="Fontes corporativas"
-          description="Conexões separadas por conta, com acesso somente leitura e credenciais protegidas no servidor."
-        >
+      <details className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer list-none pr-8 font-bold text-ink marker:hidden">
+          <span className="flex items-center justify-between gap-4">
+            <span>Importar de fontes corporativas</span>
+            <span className="text-sm font-semibold text-synapse-blue group-open:hidden">Configurar</span>
+            <span className="hidden text-sm font-semibold text-synapse-blue group-open:inline">Fechar</span>
+          </span>
+        </summary>
+        <p className="mt-3 text-sm leading-6 text-ink-soft">
+          Conexões opcionais, separadas por conta e com acesso somente leitura. Use apenas quando o conteúdo já estiver em uma fonte corporativa.
+        </p>
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <GoogleDriveConnection
             drive={googleDrive}
             isConnecting={isConnectingDrive}
             onConnect={() => void handleGoogleDriveConnection()}
             onDisconnect={() => void handleGoogleDriveDisconnect()}
           />
-          <div className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-            <CorporateConnection
-              integration={slack}
-              isConnecting={isConnectingSlack}
-              onConnect={() => void handleSlackConnection()}
-              onDisconnect={() => void handleSlackDisconnect()}
-              title="Slack"
-            />
-            <CorporateConnection
-              integration={microsoftTeams}
-              isConnecting={isConnectingMicrosoft}
-              onConnect={() => void handleMicrosoftConnection()}
-              onDisconnect={() => void handleMicrosoftDisconnect()}
-              title="Microsoft 365"
-            />
-          </div>
-        </SectionCard>
-      </div>
+          <CorporateConnection
+            integration={slack}
+            isConnecting={isConnectingSlack}
+            onConnect={() => void handleSlackConnection()}
+            onDisconnect={() => void handleSlackDisconnect()}
+            title="Slack"
+          />
+          <CorporateConnection
+            integration={microsoftTeams}
+            isConnecting={isConnectingMicrosoft}
+            onConnect={() => void handleMicrosoftConnection()}
+            onDisconnect={() => void handleMicrosoftDisconnect()}
+            title="Microsoft 365"
+          />
+        </div>
 
-      {googleDrive?.connected ? (
-        <SectionCard
-          title="Importar do Google Drive"
-          description="Informe o link ou ID de uma pasta compartilhada. O Synapse busca somente os arquivos autorizados pela conta conectada."
-        >
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              className="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm text-ink outline-none focus:border-synapse-blue focus:ring-4 focus:ring-blue-100"
-              onChange={(event) => setDriveFolderReference(event.target.value)}
-              placeholder="Link ou ID da pasta do Google Drive"
-              value={driveFolderReference}
-            />
-            <button
-              className="rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!driveFolderReference.trim() || isListingDriveFiles}
-              onClick={() => void handleGoogleDriveFiles()}
-              type="button"
-            >
-              {isListingDriveFiles ? "Buscando arquivos..." : "Buscar arquivos"}
-            </button>
-          </div>
-
-          {driveFiles.length ? (
-            <div className="mt-5 space-y-3">
-              {driveFiles.map((file) => (
-                <label
-                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-synapse-blue hover:bg-blue-50"
-                  key={file.id}
-                >
-                  <input
-                    checked={selectedDriveFileIds.includes(file.id)}
-                    className="mt-1 h-4 w-4 accent-synapse-blue"
-                    onChange={() => toggleGoogleDriveFile(file.id)}
-                    type="checkbox"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block break-words font-bold text-ink">{file.name}</span>
-                    <span className="mt-1 block text-sm text-ink-soft">
-                      {file.mime_type}{file.size_bytes ? ` · ${formatBytes(file.size_bytes)}` : ""}
-                    </span>
-                  </span>
-                </label>
-              ))}
+        {googleDrive?.connected ? (
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <h2 className="font-bold text-ink">Importar do Google Drive</h2>
+            <p className="mt-1 text-sm leading-6 text-ink-soft">Informe o link ou ID de uma pasta compartilhada para listar somente arquivos autorizados.</p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <input
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm text-ink outline-none focus:border-synapse-blue focus:ring-4 focus:ring-blue-100"
+                onChange={(event) => setDriveFolderReference(event.target.value)}
+                placeholder="Link ou ID da pasta do Google Drive"
+                value={driveFolderReference}
+              />
               <button
                 className="rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={selectedDriveFileIds.length === 0 || isImportingDriveFiles}
-                onClick={() => void handleGoogleDriveImport()}
+                disabled={!driveFolderReference.trim() || isListingDriveFiles}
+                onClick={() => void handleGoogleDriveFiles()}
                 type="button"
               >
-                {isImportingDriveFiles
-                  ? "Importando e extraindo..."
-                  : `Importar ${selectedDriveFileIds.length || ""} arquivo(s)`}
+                {isListingDriveFiles ? "Buscando arquivos..." : "Buscar arquivos"}
               </button>
             </div>
-          ) : null}
-        </SectionCard>
-      ) : null}
+            {driveFiles.length ? (
+              <div className="mt-5 space-y-3">
+                {driveFiles.map((file) => (
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-synapse-blue hover:bg-blue-50" key={file.id}>
+                    <input checked={selectedDriveFileIds.includes(file.id)} className="mt-1 h-4 w-4 accent-synapse-blue" onChange={() => toggleGoogleDriveFile(file.id)} type="checkbox" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words font-bold text-ink">{file.name}</span>
+                      <span className="mt-1 block text-sm text-ink-soft">{file.mime_type}{file.size_bytes ? ` · ${formatBytes(file.size_bytes)}` : ""}</span>
+                    </span>
+                  </label>
+                ))}
+                <button className="rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60" disabled={selectedDriveFileIds.length === 0 || isImportingDriveFiles} onClick={() => void handleGoogleDriveImport()} type="button">
+                  {isImportingDriveFiles ? "Importando e extraindo..." : `Importar ${selectedDriveFileIds.length || ""} arquivo(s)`}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-      {slack?.connected ? (
-        <SlackImportPanel
-          accessToken={session.access_token}
-          onImported={handleConnectorImportResult}
-          onError={setError}
-        />
-      ) : null}
-
-      {microsoftTeams?.connected || sharePoint?.connected ? (
-        <MicrosoftImportPanel
-          accessToken={session.access_token}
-          onImported={handleConnectorImportResult}
-          onError={setError}
-        />
-      ) : null}
+        {slack?.connected ? <SlackImportPanel accessToken={session.access_token} onImported={handleConnectorImportResult} onError={setError} /> : null}
+        {microsoftTeams?.connected || sharePoint?.connected ? <MicrosoftImportPanel accessToken={session.access_token} onImported={handleConnectorImportResult} onError={setError} /> : null}
+      </details>
 
       {message ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p> : null}
       {error ? <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{error}</p> : null}
 
-      <SectionCard
-        title="Documentos recentes"
-        description="Arquivos visíveis apenas para a conta autenticada nesta sessão."
-      >
+      <details className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer list-none pr-8 font-bold text-ink marker:hidden">
+          <span className="flex items-center justify-between gap-4">
+            <span>Documentos recentes</span>
+            <span className="text-sm font-semibold text-ink-soft">{isLoading ? "Carregando" : `${documents.length} na sua base`}</span>
+          </span>
+        </summary>
+        <p className="mt-3 text-sm leading-6 text-ink-soft">Arquivos visíveis apenas para a conta autenticada nesta sessão.</p>
+        <div className="mt-5">
         {isLoading ? <p className="text-sm text-ink-soft">Carregando documentos...</p> : null}
         {!isLoading && documents.length === 0 ? (
           <EmptyState
@@ -600,7 +578,8 @@ export default function UploadPage() {
             ))}
           </div>
         ) : null}
-      </SectionCard>
+        </div>
+      </details>
     </>
   );
 }

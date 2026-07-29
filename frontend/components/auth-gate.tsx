@@ -42,10 +42,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
 
     const client = getSupabaseBrowserClient();
-    void client.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setIsLoading(false);
-    });
+    void client.auth
+      .getSession()
+      .then(async ({ data }) => {
+        const shouldRefresh =
+          data.session?.expires_at !== undefined &&
+          data.session.expires_at * 1_000 <= Date.now() + 60_000;
+        if (shouldRefresh) {
+          const { data: refreshed } = await client.auth.refreshSession();
+          setSession(refreshed.session ?? data.session);
+        } else {
+          setSession(data.session);
+        }
+      })
+      .catch(() => setSession(null))
+      .finally(() => setIsLoading(false));
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setIsLoading(false);

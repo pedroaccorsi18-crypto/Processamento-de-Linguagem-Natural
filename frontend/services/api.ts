@@ -1,3 +1,5 @@
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+
 export type DashboardStats = {
   base_ready: number;
   evidence_count: number;
@@ -170,19 +172,27 @@ async function fetchApi(
   init?: RequestInit,
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Bearer ${accessToken}`);
+  const request = async (token: string): Promise<Response> => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const headers = new Headers(init?.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+
+    try {
+      return await fetch(apiEndpoint(path), {
+        ...init,
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
 
   try {
-    const response = await fetch(apiEndpoint(path), {
-      ...init,
-      headers,
-      signal: controller.signal,
-    });
+    let response = await request(accessToken);
     if (response.status === 401) {
-      throw new Error("Sua sessão expirou. Entre novamente para continuar.");
+      response = await retryWithRefreshedSession(request);
     }
     return response;
   } catch (error) {
@@ -190,9 +200,26 @@ async function fetchApi(
       throw new Error("A API demorou mais do que o esperado. Tente novamente em instantes.");
     }
     throw error;
-  } finally {
-    window.clearTimeout(timeout);
   }
+}
+
+async function retryWithRefreshedSession(
+  request: (token: string) => Promise<Response>,
+): Promise<Response> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Sua sessão expirou. Entre novamente para continuar.");
+  }
+
+  const { data, error } = await getSupabaseBrowserClient().auth.refreshSession();
+  if (error || data.session === null) {
+    throw new Error("Sua sessão expirou. Entre novamente para continuar.");
+  }
+
+  const response = await request(data.session.access_token);
+  if (response.status === 401) {
+    throw new Error("Sua sessão expirou. Entre novamente para continuar.");
+  }
+  return response;
 }
 
 async function responseError(response: Response, fallback: string): Promise<Error> {

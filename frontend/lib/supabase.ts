@@ -14,6 +14,12 @@ export function getSupabaseBrowserClient(): SupabaseClient {
     throw new Error("A autenticação segura da plataforma ainda não foi configurada.");
   }
 
-  browserClient ??= createClient(supabaseUrl, supabasePublishableKey);
+  browserClient ??= createClient(supabaseUrl, supabasePublishableKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  });
   return browserClient;
 }

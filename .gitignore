@@ -48,3 +48,6 @@ uploads/
 local_data/
 work/
 output/
+
+# Vercel local project link
+.vercel/

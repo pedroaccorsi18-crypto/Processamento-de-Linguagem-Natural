@@ -23,6 +23,7 @@ test("homologa ingestão, segurança e isolamento da base documental", async ({ 
 
   await test.step("rejeita um arquivo acima de 10 MB antes do envio", async () => {
     await accountAPage.goto("/upload");
+    await waitForUploadPageToBecomeInteractive(accountAPage);
     await accountAPage.locator('input[type="file"]').setInputFiles({
       name: "arquivo-acima-do-limite.txt",
       mimeType: "text/plain",
@@ -70,6 +71,7 @@ test("homologa ingestão, segurança e isolamento da base documental", async ({ 
     const accountBPage = await accountBContext.newPage();
     await signIn(accountBPage, accountB);
     await accountBPage.goto("/upload");
+    await waitForUploadPageToBecomeInteractive(accountBPage);
     await expect(accountBPage.getByText("Sua base documental está vazia.")).toBeVisible();
     await expect(accountBPage.getByText(qaFilename)).toHaveCount(0);
     await accountBContext.close();
@@ -108,6 +110,10 @@ async function signIn(page: Page, account: QaAccount): Promise<void> {
   await page.getByLabel("Senha").fill(account.password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Dashboard executivo" })).toBeVisible();
+}
+
+async function waitForUploadPageToBecomeInteractive(page: Page): Promise<void> {
+  await expect(page.getByText("Carregando documentos...")).toBeHidden();
 }
 
 function requiredApiUrl(): string {

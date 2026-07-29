@@ -7,6 +7,9 @@ on:
 
 permissions: {}
 
+env:
+  HEALTHCHECK_URL: https://synapse-ai-api-l8di.onrender.com/health
+
 concurrency:
   group: synapse-api-keep-alive
   cancel-in-progress: false
@@ -17,13 +20,31 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Consultar a saúde da API
-        env:
-          HEALTHCHECK_URL: ${{ vars.SYNAPSE_HEALTHCHECK_URL }}
         run: |
           if [ -z "$HEALTHCHECK_URL" ]; then
-            echo "Defina a variável SYNAPSE_HEALTHCHECK_URL com a URL /health do Render."
+            echo "A URL de saude da API nao foi configurada."
             exit 1
           fi
 
           response="$(curl --fail --silent --show-error --location --max-time 90 --retry 1 "$HEALTHCHECK_URL")"
           test "$(printf '%s' "$response" | jq -r '.status')" = "ok"
+
+      - name: Enviar alerta por e-mail em caso de falha
+        if: ${{ failure() }}
+        continue-on-error: true
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: ${{ secrets.SYNAPSE_ALERT_SMTP_SERVER }}
+          server_port: ${{ secrets.SYNAPSE_ALERT_SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SYNAPSE_ALERT_SMTP_USERNAME }}
+          password: ${{ secrets.SYNAPSE_ALERT_SMTP_PASSWORD }}
+          subject: "[Synapse AI] API indisponivel no monitoramento"
+          to: ${{ secrets.SYNAPSE_ALERT_EMAIL }}
+          from: "Synapse AI Monitor <${{ secrets.SYNAPSE_ALERT_SMTP_USERNAME }}>"
+          body: |
+            O monitoramento automatico nao recebeu uma resposta valida da API do Synapse AI.
+
+            URL verificada: ${{ env.HEALTHCHECK_URL }}
+            Repositorio: ${{ github.repository }}
+            Execucao: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

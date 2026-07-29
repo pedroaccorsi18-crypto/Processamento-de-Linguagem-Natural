@@ -34,6 +34,7 @@ type DocumentUploadResponse = {
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 const REQUEST_TIMEOUT_MS = 12_000;
+const COPILOT_REQUEST_TIMEOUT_MS = 75_000;
 
 function apiEndpoint(path: string): string {
   if (!apiUrl) {
@@ -47,9 +48,10 @@ async function fetchApi(
   path: string,
   accessToken: string,
   init?: RequestInit,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${accessToken}`);
 
@@ -144,7 +146,7 @@ export async function askCopilot(input: {
       current_area: input.currentArea,
       context: input.context,
     }),
-  });
+  }, COPILOT_REQUEST_TIMEOUT_MS);
   if (!response.ok) {
     throw await responseError(response, "Não foi possível consultar o Copiloto agora.");
   }

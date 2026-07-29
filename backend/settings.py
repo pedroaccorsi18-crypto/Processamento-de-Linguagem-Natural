@@ -20,10 +20,8 @@ def load_backend_config() -> AppConfig:
 
 
 def backend_cors_origins() -> list[str]:
-    raw_origins = os.getenv(
-        "BACKEND_CORS_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8501",
-    )
+    """Return the explicitly configured browser origins allowed to call the API."""
+    raw_origins = os.getenv("CORS_ORIGINS", "")
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 

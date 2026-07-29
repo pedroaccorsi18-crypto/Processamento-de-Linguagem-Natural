@@ -1,16 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-
-type CopilotMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-type CopilotResponse = {
-  answer: string;
-  model: string;
-};
+import { askCopilot, type CopilotMessagePayload } from "@/services/api";
 
 const quickPrompts = [
   "Qual é o melhor próximo passo para usar o Synapse?",
@@ -18,13 +9,9 @@ const quickPrompts = [
   "Como encontro riscos e evidências salvas?",
 ];
 
-function apiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8001";
-}
-
 export function CopilotChat() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<CopilotMessage[]>([
+  const [messages, setMessages] = useState<CopilotMessagePayload[]>([
     {
       role: "assistant",
       content:
@@ -43,7 +30,7 @@ export function CopilotChat() {
       return;
     }
 
-    const nextMessages: CopilotMessage[] = [
+    const nextMessages: CopilotMessagePayload[] = [
       ...messages,
       { role: "user", content: cleanPrompt },
     ];
@@ -53,24 +40,12 @@ export function CopilotChat() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${apiBaseUrl()}/api/copilot`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: nextMessages.slice(-12),
-          current_area: "Frontend Next.js",
-          context:
-            "Migração SaaS B2B do Synapse AI. O frontend Next.js ainda está em esqueleto e consome a API FastAPI.",
-        }),
+      const data = await askCopilot({
+        messages: nextMessages,
+        currentArea: "Frontend Next.js",
+        context:
+          "Migração SaaS B2B do Synapse AI. O frontend Next.js ainda está em esqueleto e consome a API FastAPI.",
       });
-
-      if (!response.ok) {
-        throw new Error("Não foi possível consultar o Copiloto agora.");
-      }
-
-      const data = (await response.json()) as CopilotResponse;
       setMessages((current) => [
         ...current,
         { role: "assistant", content: data.answer },
@@ -86,7 +61,7 @@ export function CopilotChat() {
         {
           role: "assistant",
           content:
-            "Não consegui completar a resposta neste momento. Verifique se a API FastAPI está rodando e tente novamente.",
+            "Não consegui completar a resposta neste momento. Verifique a conexão com a API e tente novamente.",
         },
       ]);
     } finally {

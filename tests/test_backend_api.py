@@ -33,6 +33,20 @@ def test_health_check() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_dashboard_stats_route_returns_contract() -> None:
+    client = TestClient(backend_main.app)
+
+    response = client.get("/api/dashboard/stats")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "base_ready": 0,
+        "evidence_count": 0,
+        "risk_count": 0,
+        "pending_confirmation_count": 0,
+    }
+
+
 def test_copilot_route_returns_json(monkeypatch) -> None:
     observed: dict[str, object] = {}
 

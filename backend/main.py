@@ -31,6 +31,15 @@ class CopilotResponse(BaseModel):
     model: str
 
 
+class DashboardStatsResponse(BaseModel):
+    """Initial dashboard contract, ready to be backed by Synapse repositories."""
+
+    base_ready: int
+    evidence_count: int
+    risk_count: int
+    pending_confirmation_count: int
+
+
 app = FastAPI(
     title="Synapse AI API",
     version="0.1.0",
@@ -48,6 +57,17 @@ app.add_middleware(
 @app.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/dashboard/stats", response_model=DashboardStatsResponse)
+async def get_dashboard_stats() -> DashboardStatsResponse:
+    """Expose the first dashboard contract while repository migration is incremental."""
+    return DashboardStatsResponse(
+        base_ready=0,
+        evidence_count=0,
+        risk_count=0,
+        pending_confirmation_count=0,
+    )
 
 
 @app.post("/api/copilot", response_model=CopilotResponse)

@@ -10,7 +10,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from backend.auth import AuthenticatedRequest, require_authenticated_request
-from backend.settings import backend_cors_origins
+from backend.settings import backend_cors_origin_regex, backend_cors_origins
 from synapse_ai.services.audio_transcription_service import (
     AudioTranscriptionError,
     transcribe_audio,
@@ -88,6 +88,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=backend_cors_origins(),
+    allow_origin_regex=backend_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

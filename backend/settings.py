@@ -25,6 +25,14 @@ def backend_cors_origins() -> list[str]:
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 
+def backend_cors_origin_regex() -> str:
+    """Allow the canonical Synapse deployment and its Vercel preview URLs."""
+    configured_regex = os.getenv("CORS_ORIGIN_REGEX")
+    if configured_regex and configured_regex.strip():
+        return configured_regex.strip()
+    return r"^https://processamento-de-linguagem-natural(?:-[a-z0-9]+)?\.vercel\.app$"
+
+
 def _load_streamlit_secrets() -> dict[str, Any]:
     if not STREAMLIT_SECRETS_PATH.exists():
         return {}

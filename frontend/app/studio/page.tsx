@@ -67,7 +67,7 @@ const workflows: WorkflowDefinition[] = [
   {
     id: "preventive_alerts",
     label: "Alertas preventivos",
-    description: "Antecipação de riscos, prazos críticos e lacunas de acompanhamento.",
+    description: "Antecipa riscos, prazos críticos e lacunas de acompanhamento.",
     minimumDocuments: 1,
     actionLabel: "Gerar alertas preventivos",
   },
@@ -116,14 +116,16 @@ export default function StudioPage() {
     try {
       const [nextDocuments, nextHistory] = await Promise.all([
         listStudioDocuments(session.access_token),
-        listStudioHistory(session.access_token),
+        listStudioHistory(session.access_token, 50),
       ]);
       setDocuments(nextDocuments);
       setHistory(nextHistory);
       setSelectedDocumentIds((currentSelection) => {
         const availableIds = new Set(nextDocuments.map((document) => document.id));
         const retainedIds = currentSelection.filter((documentId) => availableIds.has(documentId));
-        return retainedIds.length > 0 ? retainedIds : nextDocuments.slice(0, 1).map((document) => document.id);
+        return retainedIds.length > 0
+          ? retainedIds
+          : nextDocuments.slice(0, 1).map((document) => document.id);
       });
     } catch (nextError) {
       setError(messageFromError(nextError, "Não foi possível carregar o Estúdio de IA agora."));
@@ -201,7 +203,7 @@ export default function StudioPage() {
       setLastAnalysis(response);
       setNotice(response.message);
       if (response.saved_to_history) {
-        const nextHistory = await listStudioHistory(session.access_token);
+        const nextHistory = await listStudioHistory(session.access_token, 50);
         setHistory(nextHistory);
       }
     } catch (nextError) {
@@ -220,12 +222,18 @@ export default function StudioPage() {
       />
 
       {error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-800" role="alert">
+        <p
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-800"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}
       {notice ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-800" role="status">
+        <p
+          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-800"
+          role="status"
+        >
           {notice}
         </p>
       ) : null}
@@ -281,9 +289,12 @@ export default function StudioPage() {
                       type="checkbox"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-ink">{document.filename}</span>
+                      <span className="block truncate text-sm font-bold text-ink">
+                        {document.filename}
+                      </span>
                       <span className="mt-1 block text-xs leading-5 text-ink-soft">
-                        {document.text_char_count.toLocaleString("pt-BR")} caracteres · {document.status}
+                        {document.text_char_count.toLocaleString("pt-BR")} caracteres ·{" "}
+                        {document.status}
                       </span>
                     </span>
                     <span
@@ -367,7 +378,9 @@ export default function StudioPage() {
             <p className="font-bold text-ink">{workflowDefinition.label}</p>
             <p className="mt-2">{workflowDefinition.description}</p>
             {workflowDefinition.minimumDocuments > 1 ? (
-              <p className="mt-2 font-semibold text-amber-800">Esta análise exige pelo menos dois documentos.</p>
+              <p className="mt-2 font-semibold text-amber-800">
+                Esta análise exige pelo menos dois documentos.
+              </p>
             ) : null}
           </div>
         </div>

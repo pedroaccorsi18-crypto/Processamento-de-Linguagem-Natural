@@ -5,21 +5,33 @@ type ResultRecord = Record<string, unknown>;
 const collectionLabels: Record<string, string> = {
   agent_outputs: "Pareceres especializados",
   alerts: "Alertas identificados",
+  consensus: "Consensos encontrados",
+  conflicts: "Conflitos identificados",
+  dominant_signals: "Sinais dominantes",
   findings: "Achados estruturados",
   issues: "Inconsistências identificadas",
   items: "Itens recomendados",
   patterns: "Padrões reconhecidos",
+  recommendations: "Recomendações",
   signals: "Sinais identificados",
 };
 
 export function StudioResult({ analysis }: { analysis: StudioAnalysisResponse }) {
   const artifact = resolveArtifact(analysis.result);
-  const summary = firstText(artifact, ["answer", "executive_summary", "summary"]);
-  const collection = findCollection(artifact);
+  const summary = firstText(artifact, [
+    "answer",
+    "executive_summary",
+    "summary",
+    "overall_sentiment",
+  ]);
+  const collections = findCollections(artifact);
   const sources = asRecords(artifact.sources);
 
   return (
-    <section className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-soft-card" role="status">
+    <section
+      className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-soft-card"
+      role="status"
+    >
       <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">
@@ -34,14 +46,18 @@ export function StudioResult({ analysis }: { analysis: StudioAnalysisResponse })
 
       {summary ? <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-ink">{summary}</p> : null}
 
-      {collection ? (
-        <div className="mt-6">
-          <h3 className="text-base font-black text-ink">{collection.label}</h3>
-          <div className="mt-3 space-y-3">
-            {collection.items.map((item, index) => (
-              <ResultItem item={item} key={`${collection.key}-${index}`} position={index + 1} />
-            ))}
-          </div>
+      {collections.length > 0 ? (
+        <div className="mt-6 space-y-6">
+          {collections.map((collection) => (
+            <div key={collection.key}>
+              <h3 className="text-base font-black text-ink">{collection.label}</h3>
+              <div className="mt-3 space-y-3">
+                {collection.items.map((item, index) => (
+                  <ResultItem item={item} key={`${collection.key}-${index}`} position={index + 1} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : null}
 
@@ -129,7 +145,10 @@ function SourceList({ sources, compact = false }: { sources: ResultRecord[]; com
           const excerpt = firstText(source, ["content", "excerpt"]);
           const similarity = source.similarity;
           return (
-            <article className="rounded-lg border border-slate-200 bg-white p-3 text-sm" key={`${filename}-${index}`}>
+            <article
+              className="rounded-lg border border-slate-200 bg-white p-3 text-sm"
+              key={`${filename}-${index}`}
+            >
               <p className="font-bold text-ink">{filename}</p>
               <p className="mt-1 text-xs text-ink-soft">
                 Trecho {formatValue(source.chunk_index ?? 0)}
@@ -154,14 +173,15 @@ function resolveArtifact(result: ResultRecord): ResultRecord {
   return result;
 }
 
-function findCollection(record: ResultRecord): { key: string; label: string; items: unknown[] } | null {
-  for (const key of Object.keys(collectionLabels)) {
-    const value = record[key];
-    if (Array.isArray(value) && value.length > 0) {
-      return { key, label: collectionLabels[key], items: value };
-    }
-  }
-  return null;
+function findCollections(record: ResultRecord): { key: string; label: string; items: unknown[] }[] {
+  return Object.keys(collectionLabels)
+    .map((key) => {
+      const value = record[key];
+      return Array.isArray(value) && value.length > 0
+        ? { key, label: collectionLabels[key], items: value }
+        : null;
+    })
+    .filter((value): value is { key: string; label: string; items: unknown[] } => value !== null);
 }
 
 function asRecords(value: unknown): ResultRecord[] {
@@ -192,24 +212,34 @@ function isLongValue(value: unknown): boolean {
 
 function fieldLabel(key: string): string {
   const labels: Record<string, string> = {
+    agent_id: "Agente",
     alert_type: "Tipo",
     confidence: "Confiança",
     current_signal: "Sinal atual",
     deadline: "Prazo",
     description: "Descrição",
+    documents: "Documentos",
+    dominant_signals: "Sinais dominantes",
     evidence: "Evidência",
     historical_evidence: "Evidência histórica",
+    impact: "Impacto",
+    intensity: "Intensidade",
     interpretation: "Interpretação",
+    issue_type: "Tipo de inconsistência",
     mission: "Missão",
     overall_sentiment: "Sentimento geral",
+    owner: "Responsável",
+    polarity: "Polaridade",
     priority: "Prioridade",
     recommendation: "Recomendação",
     recurrence: "Recorrência",
     responsible: "Responsável",
     risk: "Risco",
     risk_level: "Nível de risco",
+    severity: "Severidade",
     status: "Status",
     summary: "Síntese",
+    trigger: "Gatilho",
   };
   return labels[key] ?? key.replaceAll("_", " ");
 }

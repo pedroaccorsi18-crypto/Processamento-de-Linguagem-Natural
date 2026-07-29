@@ -53,9 +53,11 @@ Implementado até agora:
 - relatórios executivos com IA;
 - auditoria de fontes com exportação em PDF e Markdown.
 
-Ainda não implementado:
+Conectores corporativos:
 
-- conectores privados com OAuth para Teams, Slack, Jira, SharePoint, CRM e ERP além do Google Drive;
+- Google Drive e Slack: OAuth disponível, com credenciais protegidas no servidor e conexões isoladas por conta;
+- Microsoft Teams e SharePoint: interface e rotas de integração concluídas; a ativação depende apenas do registro de um aplicativo no Microsoft Entra ID de uma organização que conceda essa permissão;
+- Jira, CRM e ERP: previstos para evoluções posteriores;
 - versionamento avançado de documentos.
 
 ## Stack

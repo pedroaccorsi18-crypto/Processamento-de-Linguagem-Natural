@@ -49,8 +49,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
           data.session?.expires_at !== undefined &&
           data.session.expires_at * 1_000 <= Date.now() + 60_000;
         if (shouldRefresh) {
-          const { data: refreshed } = await client.auth.refreshSession();
-          setSession(refreshed.session ?? data.session);
+          const { data: refreshed, error } = await client.auth.refreshSession();
+          setSession(error ? null : refreshed.session);
         } else {
           setSession(data.session);
         }

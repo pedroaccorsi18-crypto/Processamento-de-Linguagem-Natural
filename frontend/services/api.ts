@@ -210,13 +210,16 @@ async function retryWithRefreshedSession(
     throw new Error("Sua sessão expirou. Entre novamente para continuar.");
   }
 
-  const { data, error } = await getSupabaseBrowserClient().auth.refreshSession();
+  const client = getSupabaseBrowserClient();
+  const { data, error } = await client.auth.refreshSession();
   if (error || data.session === null) {
+    await client.auth.signOut();
     throw new Error("Sua sessão expirou. Entre novamente para continuar.");
   }
 
   const response = await request(data.session.access_token);
   if (response.status === 401) {
+    await client.auth.signOut();
     throw new Error("Sua sessão expirou. Entre novamente para continuar.");
   }
   return response;

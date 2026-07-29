@@ -78,7 +78,7 @@ export function CopilotChat() {
   }
 
   return (
-    <section className="fixed bottom-5 right-5 z-50 flex w-[calc(100vw-2.5rem)] max-w-md flex-col items-end gap-3">
+    <section className="fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-md flex-col items-end gap-3 sm:bottom-5 sm:right-5 sm:w-[calc(100vw-2.5rem)]">
       {isOpen ? (
         <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -96,7 +96,7 @@ export function CopilotChat() {
             </button>
           </div>
 
-          <div className="max-h-80 space-y-3 overflow-y-auto bg-slate-50 px-5 py-4">
+          <div className="max-h-[42vh] space-y-3 overflow-y-auto bg-slate-50 px-4 py-4 sm:max-h-80 sm:px-5">
             {visibleMessages.map((message, index) => (
               <div
                 data-role={message.role}
@@ -150,7 +150,7 @@ export function CopilotChat() {
       ) : null}
 
       <button
-        className="rounded-full bg-ink px-5 py-3 text-sm font-black text-white shadow-2xl transition hover:bg-slate-800"
+        className="rounded-full bg-ink px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:bg-slate-800 sm:px-5 sm:text-sm"
         onClick={() => setIsOpen((current) => !current)}
         type="button"
       >

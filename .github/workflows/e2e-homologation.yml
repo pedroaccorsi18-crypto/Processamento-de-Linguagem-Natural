@@ -22,6 +22,7 @@ jobs:
       E2E_QA_EMAIL_DOMAIN: synapse-e2e.invalid
       ALLOW_EXTERNAL_E2E: "true"
       E2E_RUN_COPILOT: "true"
+      E2E_RUN_STUDIO: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

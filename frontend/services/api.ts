@@ -22,6 +22,47 @@ export type CopilotMessagePayload = {
   content: string;
 };
 
+export type StudioWorkflow =
+  | "ask"
+  | "action_plan"
+  | "intelligence_snapshot"
+  | "document_comparison"
+  | "sentiment_analysis"
+  | "preventive_alerts"
+  | "historical_patterns"
+  | "multi_agent";
+
+export type StudioDocument = SynapseDocument & {
+  prepared_for_ai: boolean;
+  indexed_chunk_count: number;
+};
+
+export type StudioPreparationResponse = {
+  indexed_chunks: number;
+  message: string;
+};
+
+export type StudioAnalysisResponse = {
+  workflow: StudioWorkflow;
+  message: string;
+  saved_to_history: boolean;
+  persistence_warning: string | null;
+  result: Record<string, unknown>;
+};
+
+export type StudioHistoryEntry = {
+  id: string;
+  title: string;
+  question: string;
+  answer: string;
+  sources: Record<string, unknown>[];
+  model: string | null;
+  status: string;
+  metadata: Record<string, unknown>;
+  document_filename: string | null;
+  created_at: string | null;
+};
+
 type CopilotResponse = {
   answer: string;
   model: string;
@@ -35,6 +76,8 @@ type DocumentUploadResponse = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 const REQUEST_TIMEOUT_MS = 12_000;
 const COPILOT_REQUEST_TIMEOUT_MS = 75_000;
+const STUDIO_PREPARATION_TIMEOUT_MS = 90_000;
+const STUDIO_ANALYSIS_TIMEOUT_MS = 150_000;
 
 function apiEndpoint(path: string): string {
   if (!apiUrl) {
@@ -151,4 +194,76 @@ export async function askCopilot(input: {
     throw await responseError(response, "Não foi possível consultar o Copiloto agora.");
   }
   return (await response.json()) as CopilotResponse;
+}
+
+export async function listStudioDocuments(accessToken: string): Promise<StudioDocument[]> {
+  const response = await fetchApi("/api/studio/documents", accessToken, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível carregar o escopo documental.");
+  }
+  return (await response.json()) as StudioDocument[];
+}
+
+export async function prepareStudioDocuments(input: {
+  accessToken: string;
+  selectedDocumentIds: string[];
+}): Promise<StudioPreparationResponse> {
+  const response = await fetchApi(
+    "/api/studio/prepare",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selected_document_ids: input.selectedDocumentIds }),
+    },
+    STUDIO_PREPARATION_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível preparar este escopo para IA.");
+  }
+  return (await response.json()) as StudioPreparationResponse;
+}
+
+export async function runStudioAnalysis(input: {
+  accessToken: string;
+  workflow: StudioWorkflow;
+  selectedDocumentIds: string[];
+  question?: string;
+  saveToHistory: boolean;
+}): Promise<StudioAnalysisResponse> {
+  const response = await fetchApi(
+    `/api/studio/analyses/${input.workflow}`,
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        selected_document_ids: input.selectedDocumentIds,
+        question: input.question,
+        save_to_history: input.saveToHistory,
+      }),
+    },
+    STUDIO_ANALYSIS_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível concluir a análise agora.");
+  }
+  return (await response.json()) as StudioAnalysisResponse;
+}
+
+export async function listStudioHistory(
+  accessToken: string,
+  limit = 20,
+): Promise<StudioHistoryEntry[]> {
+  const response = await fetchApi(
+    `/api/studio/history?limit=${encodeURIComponent(String(limit))}`,
+    accessToken,
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível carregar o histórico do Estúdio.");
+  }
+  return (await response.json()) as StudioHistoryEntry[];
 }

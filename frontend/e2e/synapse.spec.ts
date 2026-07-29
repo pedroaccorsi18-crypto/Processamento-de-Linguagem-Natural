@@ -80,6 +80,36 @@ test("homologa ingestão, segurança e isolamento da base documental", async ({ 
   await accountAContext.close();
 });
 
+test("executa o Estúdio de IA com busca semântica e resposta real", async ({ browser }) => {
+  test.setTimeout(180_000);
+  test.skip(process.env.E2E_RUN_STUDIO === "false", "Estúdio desativado para esta execução.");
+
+  const { accountA } = readQaRunState().accounts;
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const prompt = "Quais informações este documento de QA registra?";
+
+  await signIn(page, accountA);
+  await page.goto("/studio");
+  await expect(page.getByText("Carregando documentos...")).toBeHidden();
+  await expect(page.getByText(qaFilename)).toBeVisible();
+
+  await page.getByRole("button", { name: "Preparar base semântica", exact: true }).click();
+  await expect(page.getByText(/Base semântica atualizada com/)).toBeVisible({ timeout: 120_000 });
+
+  await page.getByLabel("Pergunta para a base").fill(prompt);
+  await page.getByRole("button", { name: "Gerar resposta com fontes", exact: true }).click();
+
+  await expect(
+    page.getByRole("heading", {
+      name: "Resposta com fontes gerada para o escopo selecionado.",
+    }),
+  ).toBeVisible({ timeout: 150_000 });
+  await expect(page.getByText("Salvo no histórico")).toBeVisible();
+
+  await context.close();
+});
+
 test("consulta o Copiloto real e apresenta uma resposta completa", async ({ browser }) => {
   test.setTimeout(90_000);
   test.skip(process.env.E2E_RUN_COPILOT === "false", "Copiloto desativado para esta execução.");

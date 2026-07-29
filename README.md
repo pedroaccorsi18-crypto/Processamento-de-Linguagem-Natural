@@ -1,255 +1,380 @@
 # Synapse AI
 
-Synapse AI é um MVP acadêmico de Processamento de Linguagem Natural e Inteligência Organizacional. O projeto prepara uma plataforma para centralizar documentos organizacionais, estruturar conteúdo textual e permitir consultas em linguagem natural com rastreabilidade das fontes.
+> Plataforma acadêmica de Inteligência Organizacional com Processamento de Linguagem Natural, Recuperação Aumentada por Geração (RAG) e rastreabilidade de evidências.
 
-## Problema de negócio
+![Status](https://img.shields.io/badge/status-MVP%20acad%C3%AAmico-2563EB)
+![PLN](https://img.shields.io/badge/foco-PLN%20aplicado-0F766E)
+![Arquitetura](https://img.shields.io/badge/arquitetura-Next.js%20%2B%20FastAPI-111827)
 
-Organizações acumulam decisões, riscos, responsáveis e contexto em documentos dispersos. Isso dificulta auditoria, aprendizado institucional e tomada de decisão baseada em evidências.
+## 1. Resumo executivo
 
-## Objetivo acadêmico
+O **Synapse AI** é uma plataforma de inteligência organizacional desenvolvida para a disciplina de Processamento de Linguagem Natural da pós-graduação. Seu objetivo é converter documentos institucionais dispersos em uma base de conhecimento pesquisável, auditável e útil para a tomada de decisão.
 
-Construir, de forma incremental, uma arquitetura de PLN capaz de receber documentos, organizar conhecimento e apoiar análises com busca semântica, RAG e sínteses executivas.
+A plataforma recebe documentos, extrai e normaliza seu conteúdo, identifica entidades relevantes, indexa trechos semanticamente e permite consultas em linguagem natural com indicação das fontes que sustentam cada resposta. A partir desse mesmo contexto documental, oferece análises de sentimentos organizacionais, alertas preventivos e planos de ação orientados por evidências.
 
-## Estágio atual
+O projeto evoluiu de um protótipo inicial em Streamlit para uma arquitetura web desacoplada, composta por frontend em Next.js, API em FastAPI, Supabase como plataforma de dados e OpenAI como provedor de modelos de linguagem e embeddings. O Streamlit foi preservado no repositório como referência histórica e funcional durante a migração.
 
-Fase 4 inicial — Intelligence.
+## 2. Problema investigado
 
-Implementado até agora:
+Em organizações, informações críticas costumam permanecer fragmentadas entre atas, apresentações, e-mails, planilhas, relatórios, transcrições e exportações de ferramentas operacionais. Essa dispersão provoca dificuldades recorrentes:
 
-- aplicação Streamlit;
-- autenticação com Supabase Auth;
-- controle de sessão;
-- páginas públicas e privadas;
-- clientes Supabase e OpenAI centralizados;
-- arquitetura modular em `src/synapse_ai`;
-- schema SQL planejado para Supabase;
-- testes automatizados;
-- configuração de lint com Ruff;
-- upload de PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON, VTT, EML e arquivos de áudio;
-- transcrição automática de áudios para análise textual;
-- ingestão estruturada de exportações de tickets/Jira em CSV e XLSX;
-- ingestão estruturada de exportações de Slack em JSON;
-- ingestão estruturada de mensagens e transcrições do Microsoft Teams em JSON e VTT;
-- importação de arquivos de pastas compartilhadas do Google Drive via OAuth;
-- extração textual local;
-- armazenamento privado do arquivo original para download futuro;
-- metadados básicos;
-- persistência inicial na tabela `documents`;
-- chunking textual;
-- geração de embeddings com OpenAI;
-- tabela vetorial `document_chunks` com `pgvector`;
-- busca semântica via função SQL `match_document_chunks`;
-- seleção explícita de documentos para definir o escopo da análise;
-- respostas em linguagem natural com fontes recuperadas;
-- geração de planos de ação com fontes;
-- extração estruturada de inteligência organizacional;
-- identificação de decisões, riscos, inconsistências, pendências, prazos e responsáveis;
-- comparação documental para detectar divergências entre arquivos;
-- análise de sentimentos organizacionais, incluindo urgência, tensão, confiança, conflito e risco percebido;
-- geração de alertas preventivos para prazos críticos, responsáveis ausentes, riscos e lacunas de evidência;
-- reconhecimento de padrões históricos a partir de análises salvas;
-- orquestração multiagente real com agentes de decisões, riscos, consistência, sentimentos e governança;
-- dashboard executivo;
-- relatórios executivos com IA;
-- auditoria de fontes com exportação em PDF e Markdown.
+- busca lenta e dependente de conhecimento individual;
+- perda de contexto entre decisões, responsáveis, prazos e riscos;
+- baixa rastreabilidade sobre a origem de recomendações;
+- dificuldade para comparar documentos ou identificar inconsistências;
+- atraso na transformação de informação em ação executiva.
 
-Conectores corporativos:
+O Synapse AI enfrenta esse problema por meio de uma arquitetura que prioriza **extração de informação**, **recuperação semântica**, **respostas fundamentadas em fontes** e **isolamento de dados por usuário**.
 
-- Google Drive e Slack: OAuth disponível, com credenciais protegidas no servidor e conexões isoladas por conta;
-- Microsoft Teams e SharePoint: interface e rotas de integração concluídas; a ativação depende apenas do registro de um aplicativo no Microsoft Entra ID de uma organização que conceda essa permissão;
-- Jira, CRM e ERP: previstos para evoluções posteriores;
-- versionamento avançado de documentos.
+## 3. Objetivos acadêmicos
 
-## Stack
+### Objetivo geral
 
-- Python 3.11 ou superior
-- Streamlit
-- Supabase Python SDK
-- Supabase Auth
-- OpenAI Python SDK
-- pypdf
-- python-docx
-- pytest
-- ruff
+Construir um MVP de PLN capaz de organizar conhecimento institucional não estruturado e apoiar consultas e análises documentais com transparência sobre as evidências utilizadas.
 
-## Estrutura
+### Objetivos específicos
 
-```text
-app.py
-src/synapse_ai/
-  auth/
-  clients/
-  models/
-  services/
-  ui/
-  utils/
-tests/
-supabase/schema.sql
-.streamlit/config.toml
-.streamlit/secrets.example.toml
+1. Receber e extrair texto de múltiplos formatos documentais.
+2. Aplicar reconhecimento de entidades nomeadas para enriquecer metadados de contexto.
+3. Dividir documentos em trechos semanticamente recuperáveis.
+4. Gerar embeddings e executar busca vetorial com `pgvector`.
+5. Implementar RAG para responder perguntas com fontes recuperadas.
+6. Gerar Plano de Ação, Análise de Sentimentos e Alertas Preventivos a partir da base documental.
+7. Preservar histórico e trilha de evidências para auditoria.
+8. Demonstrar princípios de segurança, autenticação e isolamento de usuários em um produto web.
+
+## 4. Escopo do MVP
+
+### Entregas principais
+
+- autenticação por e-mail e senha com Supabase Auth;
+- segregação de dados por conta, com Row Level Security no Supabase;
+- upload, extração e armazenamento privado de documentos;
+- suporte a PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON, VTT, EML, MP3, M4A e WAV;
+- leitura estruturada de exportações de Jira, Slack e Teams em formatos de arquivo;
+- transcrição de áudio para conteúdo pesquisável;
+- identificação de entidades como pessoas, organizações, datas e valores;
+- chunking, embeddings e busca vetorial;
+- seleção explícita do escopo documental da análise;
+- RAG com citações de fontes e similaridade;
+- Estúdio de IA com Plano de Ação, Sentimentos Organizacionais e Alertas Preventivos;
+- Copiloto contextual;
+- Dashboard, Insights e Trilha de Evidências;
+- geração de relatórios e exportações;
+- frontend responsivo em Next.js e API FastAPI publicada.
+
+### Limites assumidos
+
+O projeto é um **MVP acadêmico**, não uma solução corporativa plenamente homologada. Conectores diretos de Microsoft Teams e SharePoint requerem credenciais e consentimento de administrador de uma organização Microsoft 365. Jira, CRM e ERP são suportados por meio de exportações de arquivos, mas seus conectores diretos permanecem como evolução futura.
+
+## 5. Fundamentos de PLN aplicados
+
+| Conceito | Aplicação no Synapse AI | Resultado esperado |
+| --- | --- | --- |
+| Extração de texto | Parsers por formato e transcrição de áudio | Conteúdo textual normalizado para processamento |
+| Reconhecimento de Entidades Nomeadas (NER) | spaCy antes da indexação semântica | Pessoas, organizações, datas e valores em metadados |
+| Segmentação em trechos | Chunking com sobreposição controlada | Contexto recuperável sem exceder limites de modelo |
+| Representação vetorial | Embeddings gerados pela OpenAI | Similaridade semântica entre pergunta e documento |
+| Recuperação de informação | Consulta vetorial em `document_chunks` | Seleção dos trechos mais relevantes |
+| RAG | LLM recebe apenas evidências recuperadas | Resposta contextualizada com fontes |
+| Análise de sentimentos | Leitura orientada a urgência, tensão, confiança e conflito | Sinais organizacionais, não diagnóstico individual |
+| Extração de informação | Decisões, riscos, prazos, responsáveis e pendências | Base para alertas e planos de ação |
+
+### Estratégia para reduzir alucinação estrutural
+
+O Synapse AI não trata uma resposta de LLM como uma fonte autônoma de verdade. A resposta é precedida por recuperação semântica de trechos vinculados a documentos do usuário. As fontes incluem identificador do documento, trecho, índice e score de similaridade. O backend também expõe uma avaliação de **precisão de contexto**, útil para verificar se os chunks recuperados correspondem aos termos ou ao cenário esperado em uma consulta de teste.
+
+## 6. Arquitetura
+
+```mermaid
+flowchart LR
+    U["Usuário autenticado"] --> FE["Frontend Next.js"]
+    FE -->|"Bearer token"| API["FastAPI"]
+    API --> AUTH["Supabase Auth"]
+    API --> DB["Supabase Postgres + RLS"]
+    API --> ST["Supabase Storage privado"]
+    API --> PLN["Núcleo Python de PLN"]
+    PLN --> NER["spaCy NER"]
+    PLN --> EMB["OpenAI Embeddings"]
+    EMB --> VDB["pgvector / document_chunks"]
+    PLN --> LLM["OpenAI LLM"]
+    VDB --> LLM
+    LLM --> API
+    API --> FE
 ```
 
-## Requisitos
+### Camadas e responsabilidades
 
-- Python 3.11+
-- Git
-- Conta/projeto Supabase
-- Chave OpenAI configurada localmente apenas quando as fases futuras exigirem uso real
+| Camada | Diretório | Responsabilidade |
+| --- | --- | --- |
+| Interface moderna | `frontend/` | Navegação, autenticação cliente, estados de carregamento e experiência do usuário |
+| API | `backend/` | Validação, autenticação, rotas REST, CORS e adaptação das respostas |
+| Aplicação | `src/synapse_ai/application/` | Casos de uso, comandos, resultados e orquestração |
+| Recuperação semântica | `src/synapse_ai/application/retrieval/` | Embedding da consulta, busca vetorial e construção de fontes |
+| Serviços | `src/synapse_ai/services/` | Extração, parsing, NER, chunking, conectores, análises e persistência |
+| Persistência | `supabase/schema.sql` | Tabelas, funções vetoriais, políticas RLS e storage privado |
+| Interface legada | `src/synapse_ai/ui/` | Referência Streamlit preservada durante a migração |
 
-## Instalação no Windows
+### Fluxo de uma pergunta com fontes
 
-Crie o ambiente virtual:
+```mermaid
+sequenceDiagram
+    participant Pessoa as Usuário
+    participant Web as Next.js
+    participant API as FastAPI
+    participant R as SemanticRetriever
+    participant V as pgvector
+    participant M as OpenAI
+    participant S as Supabase
+
+    Pessoa->>Web: Define documentos e envia pergunta
+    Web->>API: POST com token e escopo
+    API->>R: Executa recuperação semântica
+    R->>M: Gera embedding da consulta
+    R->>V: Busca chunks mais similares
+    V->>R: Retorna trechos e metadados
+    R->>M: Envia contexto recuperado + pergunta
+    M->>API: Resposta fundamentada
+    API->>S: Salva histórico opcional
+    API->>Web: Resposta, fontes e metadados
+```
+
+## 7. Fluxo funcional do produto
+
+1. O usuário cria uma conta ou entra na plataforma.
+2. Envia um documento local ou conecta uma fonte corporativa autorizada.
+3. O backend valida o arquivo, extrai o texto e registra metadados.
+4. O arquivo original é armazenado em bucket privado quando aplicável.
+5. No Estúdio de IA, o usuário escolhe o escopo documental e prepara a base.
+6. O pipeline divide o conteúdo em chunks, aplica NER, gera embeddings e persiste os vetores.
+7. O usuário escolhe um fluxo analítico ou formula uma pergunta.
+8. A recuperação vetorial localiza evidências relevantes apenas no escopo selecionado.
+9. A IA produz uma resposta contextualizada e vinculada às fontes.
+10. Resultados salvos podem alimentar Insights, Auditoria e histórico institucional.
+
+## 8. Funcionalidades por área
+
+### Base documental
+
+- ingestão local de documentos;
+- detecção de duplicidade por conteúdo dentro da mesma conta;
+- extração de texto e metadados;
+- persistência isolada por usuário;
+- download do arquivo original quando disponível;
+- integração OAuth preparada para Google Drive e Slack;
+- área corporativa recolhida na interface para reduzir carga cognitiva.
+
+### Estúdio de IA
+
+O MVP concentra o Estúdio em três fluxos de alto valor para a apresentação:
+
+- **Plano de Ação:** organiza tarefas, responsáveis, prazos, riscos e critérios de aceite;
+- **Sentimentos Organizacionais:** identifica sinais de urgência, tensão, confiança, conflito e percepção de risco no conteúdo institucional;
+- **Alertas Preventivos:** destaca dependências, prazos críticos, pendências, responsáveis ausentes e lacunas de evidência.
+
+Cada fluxo exige documentos selecionados e base semântica preparada. A preparação não precisa ser repetida a cada pergunta: ela só é necessária após incluir documentos novos, alterar o escopo ou atualizar a indexação.
+
+### Insights e evidências
+
+- KPIs executivos;
+- consolidação de alertas, planos e achados;
+- navegação por evidências recuperadas;
+- histórico de análises;
+- exportações compatíveis com a auditoria acadêmica do resultado.
+
+### Copiloto Synapse
+
+O Copiloto atua como assistente de produto e orientação contextual. Recebe a área atual, o caminho de navegação e, quando disponível, o identificador do documento selecionado. A busca semântica pode ser restrita a esse documento para evitar mistura de contextos não relacionados.
+
+## 9. Modelo de dados e segurança
+
+As principais entidades estão definidas em [`supabase/schema.sql`](supabase/schema.sql):
+
+- `profiles`: perfil vinculado ao usuário autenticado;
+- `documents`: arquivo, texto extraído, status, metadados e referência de storage;
+- `document_chunks`: trechos, embeddings e metadados de PLN, incluindo entidades;
+- `analyses`: perguntas, respostas, fontes e artefatos analíticos;
+- registros de conexão de integrações, quando habilitados.
+
+### Controles aplicados
+
+- Supabase Auth para identidade;
+- token Bearer obrigatório nas rotas protegidas da API;
+- Row Level Security para documentos, chunks e análises;
+- clientes Supabase com escopo do token do usuário;
+- storage privado com caminhos associados ao `user_id`;
+- credenciais OAuth protegidas no backend;
+- chaves fora do Git, em variáveis de ambiente ou arquivos locais ignorados;
+- conectores projetados com escopos de leitura e autorização explícita.
+
+> **Importante:** credenciais usadas durante demonstrações devem ser rotacionadas antes de qualquer abertura pública ampla ou comercialização do produto.
+
+## 10. Stack tecnológica
+
+### Frontend
+
+- Next.js 15;
+- React 19;
+- TypeScript;
+- Tailwind CSS;
+- Supabase JavaScript SDK;
+- Playwright para testes E2E.
+
+### Backend e núcleo de PLN
+
+- Python 3.11+;
+- FastAPI e Pydantic;
+- Uvicorn;
+- OpenAI Python SDK;
+- spaCy;
+- Supabase Python SDK;
+- `pgvector`;
+- `pypdf`, `python-docx`, `openpyxl` e parsers complementares;
+- pytest, Ruff e mypy.
+
+## 11. Execução local
+
+### Pré-requisitos
+
+- Python 3.11 ou superior;
+- Node.js 20 ou superior;
+- projeto Supabase;
+- chave da API OpenAI;
+- schema atualizado no Supabase;
+- credenciais OAuth apenas para os conectores que serão demonstrados.
+
+### Backend
+
+Crie `backend/.env` a partir de [`backend/.env.example`](backend/.env.example), sem versionar segredos. Em seguida:
 
 ```powershell
-py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --env-file backend\.env --host 127.0.0.1 --port 8000 --reload
 ```
 
-Ative o ambiente:
+O health check estará disponível em `http://localhost:8000/health`.
+
+### Frontend
+
+Crie `frontend/.env.local` a partir de [`frontend/.env.example`](frontend/.env.example) e execute:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+cd frontend
+npm install
+npm run dev
 ```
 
-Instale as dependências:
+O frontend abrirá em `http://localhost:3000`.
+
+### Interface Streamlit de referência
 
 ```powershell
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -e ".[dev]"
+.\.venv\Scripts\streamlit.exe run app.py
 ```
 
-Para ambiente publicado, `requirements.txt` já instala o pacote local e as dependências de runtime.
-O extra `.[dev]` é usado apenas para testes, lint e type checking no desenvolvimento.
+## 12. Configuração de ambiente
 
-## Configuração de segredos
+### Frontend
 
-Crie um arquivo local `.streamlit/secrets.toml` com a estrutura abaixo. Não versione esse arquivo.
-
-```toml
-[supabase]
-url = "https://SEU-PROJETO.supabase.co"
-publishable_key = "sb_publishable_EXEMPLO"
-
-[openai]
-api_key = "sk-proj-EXEMPLO"
-embedding_model = "text-embedding-3-small"
-generation_model = "gpt-5-mini"
-transcription_model = "gpt-4o-mini-transcribe"
-
-[app]
-public_url = "http://localhost:8501"
-
-[google_drive]
-api_key = ""
-client_id = "GOOGLE_OAUTH_CLIENT_ID_EXEMPLO"
-client_secret = "GOOGLE_OAUTH_CLIENT_SECRET_EXEMPLO"
-redirect_uri = "http://localhost:8501"
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_EXEMPLO
 ```
 
-O repositório inclui `.streamlit/secrets.example.toml` apenas como exemplo sem credenciais reais.
+### Backend
 
-Para produto real, o caminho recomendado para Google Drive é OAuth. A empresa cria um cliente OAuth
-no Google Cloud, autoriza o Synapse AI e o sistema usa um token de acesso com escopo somente leitura
-do Drive. A opção `google_drive.api_key` existe apenas como compatibilidade para demonstrações com
-pastas compartilhadas.
+```env
+CORS_ORIGINS=http://localhost:3000
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_EXEMPLO
+OPENAI_API_KEY=CHAVE_PRIVADA
+OPENAI_GENERATION_MODEL=gpt-5-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+```
 
-## Supabase
+Consulte os arquivos `.env.example` para o conjunto completo. Nunca inclua chaves reais em commits, screenshots ou relatórios acadêmicos.
 
-1. Crie um projeto no Supabase.
-2. Ative autenticação por e-mail e senha.
-3. Copie a URL do projeto e a publishable key para `.streamlit/secrets.toml`.
-4. Em produção, configure `app.public_url` com a URL pública do Synapse AI e cadastre a
-   mesma URL em Authentication > URL Configuration no Supabase.
-5. Abra `supabase/schema.sql`.
-6. Revise o SQL.
-7. Execute manualmente no Supabase SQL Editor.
+## 13. Banco de dados e migrações
 
-O script cria tabelas para `profiles`, `documents`, `document_chunks` e `analyses`, configura o bucket privado `documents`, habilita Row Level Security e define políticas por usuário. Na Fase 3, `document_chunks` armazena os trechos, embeddings e metadados usados pela busca semântica.
+1. Abra o Supabase SQL Editor no projeto correto.
+2. Revise [`supabase/schema.sql`](supabase/schema.sql).
+3. Execute o script integralmente.
+4. Verifique tabelas, políticas RLS, bucket privado e funções de busca vetorial.
+5. Sempre que o schema for atualizado, execute a versão atualizada antes de testar novos fluxos.
 
-## Executar o app
+O schema é idempotente nas principais estruturas. Em alterações de funções SQL com retorno modificado, pode ser necessário remover a função anterior conforme indicado no próprio script.
+
+## 14. Qualidade e validação
+
+### Comandos principais
 
 ```powershell
-streamlit run app.py
+# Backend
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy src/synapse_ai/application
+
+# Frontend
+cd frontend
+npm run lint
+npm run typecheck
+npm run build
 ```
 
-## Publicação web para apresentação
+### Cobertura de validação
 
-Para sair do `localhost`, o projeto deve ser publicado em um serviço web compatível com Streamlit.
-URL pública da apresentação:
+- testes unitários para serviços, repositórios e casos de uso;
+- testes de contratos da API;
+- testes E2E com Playwright;
+- lint, tipagem e build de produção;
+- avaliação de precisão de contexto para consultas RAG;
+- verificação manual de fluxo com documento de teste.
 
-```text
-https://synapse-ai-pnl.streamlit.app/
-```
+## 15. Deploy
 
-O fluxo recomendado para a apresentação é:
+| Camada | Plataforma | Endereço |
+| --- | --- | --- |
+| Frontend | Vercel | [processamento-de-linguagem-natural.vercel.app](https://processamento-de-linguagem-natural.vercel.app) |
+| Backend | Render | [synapse-ai-api-l8di.onrender.com](https://synapse-ai-api-l8di.onrender.com) |
+| Saúde da API | Render | [health](https://synapse-ai-api-l8di.onrender.com/health) |
 
-1. subir o repositório atualizado para o GitHub;
-2. publicar o app em Streamlit Community Cloud, Render, Railway ou serviço equivalente;
-3. configurar no ambiente web os mesmos segredos de `.streamlit/secrets.toml`;
-4. manter Supabase como backend remoto;
-5. cadastrar a URL pública do app como redirect URI autorizado no Google Cloud OAuth;
-6. testar login, upload, Google Drive, preparação semântica, análises e download de relatórios na URL final.
+O workflow em `.github/workflows/keep-render-awake.yml` consulta periodicamente a rota `/health` para reduzir o tempo de retomada do ambiente gratuito do Render.
 
-Sem a URL pública cadastrada no Google Cloud, o OAuth do Google Drive continuará funcionando apenas no
-endereço local configurado.
+## 16. Roteiro de demonstração para a banca
 
-Guia detalhado: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-Roteiro de demonstração: [`docs/PRESENTATION_CHECKLIST.md`](docs/PRESENTATION_CHECKLIST.md).
+1. Abra a URL pública e entre com uma conta de demonstração.
+2. Acesse **Base documental** e envie um documento de teste.
+3. Confirme a extração de texto e o status do documento.
+4. Abra o **Estúdio de IA**, selecione o documento e prepare a base semântica.
+5. Execute **Alertas Preventivos** e explique os riscos, prazos e fontes.
+6. Execute **Plano de Ação** e destaque responsáveis e critérios de aceite.
+7. Execute **Sentimentos Organizacionais** e ressalte que a análise se limita ao contexto institucional.
+8. Acesse **Insights** e **Evidências** para mostrar a continuidade entre análise e auditoria.
+9. Use o **Copiloto** para orientar uma pergunta dentro do documento selecionado.
+10. Explique a arquitetura, o RAG, o NER, o isolamento de usuários e as limitações do MVP.
 
-## Testes
+## 17. Próximas evoluções
 
-```powershell
-pytest
-```
+- concluir homologação dos conectores Microsoft 365, Teams e SharePoint;
+- integrar conectores diretos de Jira, CRM e ERP;
+- enriquecer os indicadores de Dashboard e Insights com séries históricas;
+- executar avaliações RAG com conjunto de perguntas de referência;
+- adicionar observabilidade, métricas de custo e trilha operacional;
+- adicionar filas assíncronas para ingestões extensas;
+- formalizar gestão de organizações e `tenant_id` para multi-tenancy corporativo;
+- fortalecer o Copiloto como camada transversal com ações autorizadas;
+- ampliar validações de segurança e revisão de privacidade antes de uso comercial.
 
-Os testes usam mocks e fakes. Eles não acessam internet, não criam usuários reais e não consomem créditos.
+## 18. Documentação complementar
 
-## Lint
+- [Arquitetura detalhada](ARCHITECTURE_REVIEW.md)
+- [Mapa de arquitetura](PROJECT_ARCHITECTURE.md)
+- [Documentação de deploy](docs/DEPLOYMENT.md)
+- [Checklist de apresentação](docs/PRESENTATION_CHECKLIST.md)
+- [Automação de QA](docs/QA_AUTOMATION.md)
+- [ADRs](docs/adr/)
+- [README do frontend](frontend/README.md)
 
-```powershell
-ruff check .
-```
+## Licença
 
-## Roadmap
-
-Fase 1 — Foundation
-
-- arquitetura;
-- autenticação;
-- sessão;
-- clientes;
-- testes.
-
-Fase 2 — Data Layer
-
-- upload;
-- extração;
-- parsing;
-- metadados;
-- persistência.
-
-Fase 3 — AI Layer
-
-- chunking;
-- embeddings;
-- banco vetorial;
-- busca semântica;
-- RAG.
-
-Fase 4 — Intelligence
-
-- sínteses;
-- riscos;
-- inconsistências;
-- sentimentos organizacionais;
-- alertas preventivos;
-- padrões históricos;
-- insights;
-- agentes especializados.
-
-## Limitações
-
-Esta versão entrega a fundação técnica, a camada de dados, RAG e análises organizacionais avançadas.
-A página de upload processa documentos localmente e persiste texto/metadados no Supabase. A página
-de análises depende do `schema.sql` atualizado, de documentos salvos e da preparação semântica dos
-documentos antes das perguntas.
+Este repositório possui fins acadêmicos. Consulte [LICENSE](LICENSE) para os termos aplicáveis.

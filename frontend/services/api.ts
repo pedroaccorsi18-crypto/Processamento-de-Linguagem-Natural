@@ -37,7 +37,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 
 function apiEndpoint(path: string): string {
   if (!apiUrl) {
-    throw new Error("A conexao com a API ainda nao foi configurada.");
+    throw new Error("A conexão com a API ainda não foi configurada.");
   }
 
   return `${apiUrl.replace(/\/$/, "")}${path}`;
@@ -60,7 +60,7 @@ async function fetchApi(
       signal: controller.signal,
     });
     if (response.status === 401) {
-      throw new Error("Sua sessao expirou. Entre novamente para continuar.");
+      throw new Error("Sua sessão expirou. Entre novamente para continuar.");
     }
     return response;
   } catch (error) {
@@ -83,7 +83,7 @@ export async function getDashboardStats(accessToken: string): Promise<DashboardS
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
-    throw await responseError(response, "Nao foi possivel carregar os indicadores do painel.");
+    throw await responseError(response, "Não foi possível carregar os indicadores do painel.");
   }
   return (await response.json()) as DashboardStats;
 }
@@ -93,7 +93,7 @@ export async function listDocuments(accessToken: string): Promise<SynapseDocumen
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
-    throw await responseError(response, "Nao foi possivel carregar os documentos.");
+    throw await responseError(response, "Não foi possível carregar os documentos.");
   }
   return (await response.json()) as SynapseDocument[];
 }
@@ -109,7 +109,7 @@ export async function uploadDocument(
     body: formData,
   });
   if (!response.ok) {
-    throw await responseError(response, "Nao foi possivel processar o documento.");
+    throw await responseError(response, "Não foi possível processar o documento.");
   }
   return (await response.json()) as DocumentUploadResponse;
 }
@@ -117,7 +117,7 @@ export async function uploadDocument(
 export async function downloadDocument(accessToken: string, document: SynapseDocument): Promise<void> {
   const response = await fetchApi(`/api/documents/${document.id}/download`, accessToken);
   if (!response.ok) {
-    throw await responseError(response, "Nao foi possivel baixar o arquivo original.");
+    throw await responseError(response, "Não foi possível baixar o arquivo original.");
   }
 
   const url = URL.createObjectURL(await response.blob());
@@ -146,7 +146,7 @@ export async function askCopilot(input: {
     }),
   });
   if (!response.ok) {
-    throw await responseError(response, "Nao foi possivel consultar o Copiloto agora.");
+    throw await responseError(response, "Não foi possível consultar o Copiloto agora.");
   }
   return (await response.json()) as CopilotResponse;
 }

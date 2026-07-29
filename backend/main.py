@@ -193,11 +193,11 @@ async def create_document(
     return DocumentUploadResponse(
         document=_document_response(saved_document, original_file_available),
         message=(
-            "Documento processado e salvo com download privado disponivel."
+            "Documento processado e salvo com download privado disponível."
             if original_file_available
             else (
-                "Documento processado e salvo para analise. "
-                "O arquivo original nao ficou disponivel."
+                "Documento processado e salvo para análise. "
+                "O arquivo original não ficou disponível."
             )
         ),
     )
@@ -217,7 +217,7 @@ async def download_document(
     if document is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Documento nao encontrado.",
+            detail="Documento não encontrado.",
         )
 
     bucket = document.get("storage_bucket")
@@ -225,7 +225,7 @@ async def download_document(
     if not isinstance(bucket, str) or not isinstance(path, str) or not bucket or not path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="O arquivo original nao esta disponivel para download.",
+            detail="O arquivo original não está disponível para download.",
         )
 
     try:

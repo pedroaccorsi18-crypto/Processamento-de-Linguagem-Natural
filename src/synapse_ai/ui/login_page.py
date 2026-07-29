@@ -21,7 +21,7 @@ def render_login_page(config: AppConfig) -> None:
     _, center, _ = st.columns((0.2, 0.6, 0.2))
     with center:
         with st.form("login_form"):
-            email = st.text_input("E-mail", placeholder="voce@empresa.com")
+            email = st.text_input("E-mail", placeholder="nome@empresa.com")
             password = st.text_input("Senha", type="password")
             submitted = st.form_submit_button(
                 "Entrar com segurança",

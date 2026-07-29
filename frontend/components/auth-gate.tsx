@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function useSynapseSession(): AuthContextValue {
   const value = useContext(AuthContext);
   if (value === null) {
-    throw new Error("A sessao do Synapse nao esta disponivel.");
+    throw new Error("A sessão do Synapse não está disponível.");
   }
   return value;
 }
@@ -91,9 +91,9 @@ function ConfigurationRequired() {
   return (
     <main className="grid min-h-screen place-items-center bg-surface-subtle px-5">
       <section className="max-w-lg rounded-2xl border border-amber-200 bg-amber-50 p-7 text-amber-950 shadow-soft-card">
-        <p className="text-lg font-black">A plataforma esta sendo configurada.</p>
+        <p className="text-lg font-black">A plataforma está sendo configurada.</p>
         <p className="mt-2 text-sm leading-6">
-          A autenticacao segura ainda nao recebeu as configuracoes publicas do Supabase.
+          A autenticação segura ainda não recebeu as configurações públicas do Supabase.
           Tente novamente em alguns instantes.
         </p>
       </section>
@@ -140,7 +140,7 @@ function SignInCard() {
       <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-soft-card">
         <p className="text-2xl font-black text-ink">Synapse AI</p>
         <p className="mt-2 text-sm leading-6 text-ink-soft">
-          Entre para acessar sua base documental privada e as analises da sua conta.
+          Entre para acessar sua base documental privada e as análises da sua conta.
         </p>
         <form className="mt-7 space-y-4" onSubmit={submit}>
           <label className="block text-sm font-bold text-ink" htmlFor="synapse-email">
@@ -189,7 +189,7 @@ function SignInCard() {
           }}
           type="button"
         >
-          {mode === "signIn" ? "Criar uma conta" : "Ja tenho uma conta"}
+          {mode === "signIn" ? "Criar uma conta" : "Já tenho uma conta"}
         </button>
       </section>
     </main>

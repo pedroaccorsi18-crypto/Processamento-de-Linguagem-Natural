@@ -11,7 +11,7 @@ export function isSupabaseConfigured(): boolean {
 
 export function getSupabaseBrowserClient(): SupabaseClient {
   if (!supabaseUrl || !supabasePublishableKey) {
-    throw new Error("A autenticacao segura da plataforma ainda nao foi configurada.");
+    throw new Error("A autenticação segura da plataforma ainda não foi configurada.");
   }
 
   browserClient ??= createClient(supabaseUrl, supabasePublishableKey);

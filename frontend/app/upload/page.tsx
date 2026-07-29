@@ -31,7 +31,7 @@ export default function UploadPage() {
       setDocuments(nextDocuments);
       setError(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Nao foi possivel carregar documentos.");
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível carregar documentos.");
     }
   }, [session.access_token]);
 
@@ -64,7 +64,7 @@ export default function UploadPage() {
       }
       setMessage(result.message);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Nao foi possivel processar o arquivo.");
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível processar o arquivo.");
     } finally {
       setIsUploading(false);
     }
@@ -75,7 +75,7 @@ export default function UploadPage() {
       setError(null);
       await downloadDocument(session.access_token, document);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Nao foi possivel baixar o arquivo.");
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível baixar o arquivo.");
     }
   }
 
@@ -83,19 +83,19 @@ export default function UploadPage() {
     <>
       <PageHeader
         eyebrow="Base documental"
-        title="Ingestao documental"
-        description="Envie arquivos da sua conta para extrair texto, preservar o original e preparar a proxima analise."
+        title="Ingestão documental"
+        description="Envie arquivos da sua conta para extrair texto, preservar o original e preparar a próxima análise."
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <SectionCard
           title="Enviar arquivo"
-          description="O Synapse extrai o conteudo, salva o documento com isolamento por conta e preserva o arquivo original para download."
+          description="O Synapse extrai o conteúdo, salva o documento com isolamento por conta e preserva o arquivo original para download."
         >
           <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center">
             <p className="text-lg font-bold text-ink">Selecione um documento</p>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
-              PDF, DOCX, PPTX, XLSX, TXT, CSV, JSON, EML e arquivos de audio ate 10 MB.
+              PDF, DOCX, PPTX, XLSX, TXT, CSV, JSON, EML e arquivos de áudio até 10 MB.
             </p>
             <input
               accept={acceptedFormats}
@@ -124,23 +124,23 @@ export default function UploadPage() {
 
         <SectionCard
           title="Fontes corporativas"
-          description="A conexao com Google Drive, Slack, Teams e SharePoint sera migrada mantendo as credenciais segregadas por conta."
+          description="A conexão com Google Drive, Slack, Teams e SharePoint será migrada, mantendo as credenciais segregadas por conta."
         >
           <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-ink-soft">
-            Nesta primeira entrega da API, o upload local esta disponivel. Os conectores existentes
-            continuam funcionando na plataforma Streamlit enquanto chegam a esta interface nova.
+            Nesta primeira entrega da API, o upload local está disponível. Os conectores existentes
+            continuam funcionando na plataforma Streamlit enquanto são incorporados à nova interface.
           </p>
         </SectionCard>
       </div>
 
       <SectionCard
         title="Documentos recentes"
-        description="Arquivos visiveis apenas para a conta autenticada nesta sessao."
+        description="Arquivos visíveis apenas para a conta autenticada nesta sessão."
       >
         {isLoading ? <p className="text-sm text-ink-soft">Carregando documentos...</p> : null}
         {!isLoading && documents.length === 0 ? (
           <EmptyState
-            title="Sua base documental esta vazia."
+            title="Sua base documental está vazia."
             description="Envie o primeiro arquivo para criar uma base privada de conhecimento."
           />
         ) : null}
@@ -154,7 +154,7 @@ export default function UploadPage() {
                 <div>
                   <p className="font-bold text-ink">{document.filename}</p>
                   <p className="mt-1 text-sm text-ink-soft">
-                    {document.text_char_count.toLocaleString("pt-BR")} caracteres extraidos · {document.status}
+                    {document.text_char_count.toLocaleString("pt-BR")} caracteres extraídos · {document.status}
                   </p>
                 </div>
                 {document.original_file_available ? (
@@ -166,7 +166,7 @@ export default function UploadPage() {
                     Baixar original
                   </button>
                 ) : (
-                  <span className="text-sm font-semibold text-amber-700">Original indisponivel</span>
+                  <span className="text-sm font-semibold text-amber-700">Original indisponível</span>
                 )}
               </article>
             ))}

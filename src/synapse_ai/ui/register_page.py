@@ -19,7 +19,7 @@ def render_register_page(config: AppConfig) -> None:
     _, center, _ = st.columns((0.2, 0.6, 0.2))
     with center:
         with st.form("register_form"):
-            email = st.text_input("E-mail", placeholder="voce@empresa.com")
+            email = st.text_input("E-mail", placeholder="nome@empresa.com")
             password = st.text_input("Senha", type="password")
             confirmation = st.text_input("Confirmação de senha", type="password")
             submitted = st.form_submit_button(

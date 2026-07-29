@@ -9,9 +9,9 @@ import { CopilotChat } from "@/components/copilot-chat";
 const navigationItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/upload", label: "Base documental" },
-  { href: "/studio", label: "Estudio de IA" },
+  { href: "/studio", label: "Estúdio de IA" },
   { href: "/insights", label: "Insights" },
-  { href: "/audit", label: "Evidencias" },
+  { href: "/audit", label: "Evidências" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -31,7 +31,7 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
         <div>
           <p className="text-2xl font-bold tracking-tight">Synapse AI</p>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Inteligencia organizacional com rastreabilidade.
+            Inteligência organizacional com rastreabilidade.
           </p>
           <p className="mt-5 truncate text-xs text-slate-400">Conta: {user.email}</p>
           <button
@@ -55,7 +55,7 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
           <p className="font-semibold text-white">Copiloto ativo</p>
-          <p className="mt-2">Use o assistente para orientar a proxima decisao.</p>
+          <p className="mt-2">Use o assistente para orientar a próxima decisão.</p>
         </div>
       </aside>
 

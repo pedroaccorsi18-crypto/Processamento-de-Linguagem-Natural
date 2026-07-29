@@ -34,7 +34,7 @@ def require_authenticated_request(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sua sessao expirou. Entre novamente para continuar.",
+            detail="Sua sessão expirou. Entre novamente para continuar.",
         )
 
     try:
@@ -42,7 +42,7 @@ def require_authenticated_request(
     except MissingConfigError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="A configuracao segura da plataforma esta incompleta.",
+            detail="A configuração segura da plataforma está incompleta.",
         ) from exc
 
     verification_client = create_supabase_client(config)
@@ -50,7 +50,7 @@ def require_authenticated_request(
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sua sessao nao pode ser validada. Entre novamente para continuar.",
+            detail="Sua sessão não pode ser validada. Entre novamente para continuar.",
         )
 
     return AuthenticatedRequest(

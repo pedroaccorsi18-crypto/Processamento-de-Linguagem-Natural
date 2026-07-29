@@ -81,6 +81,7 @@ test("homologa ingestão, segurança e isolamento da base documental", async ({ 
 });
 
 test("consulta o Copiloto real e apresenta uma resposta completa", async ({ browser }) => {
+  test.setTimeout(90_000);
   test.skip(process.env.E2E_RUN_COPILOT === "false", "Copiloto desativado para esta execução.");
 
   const { accountA } = readQaRunState().accounts;

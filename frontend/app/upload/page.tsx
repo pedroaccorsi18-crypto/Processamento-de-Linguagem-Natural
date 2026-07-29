@@ -8,24 +8,48 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import {
+  beginMicrosoftAuthorization,
   beginGoogleDriveAuthorization,
+  beginSlackAuthorization,
+  completeMicrosoftAuthorization,
   completeGoogleDriveAuthorization,
+  completeSlackAuthorization,
+  disconnectMicrosoft,
   disconnectGoogleDrive,
+  disconnectSlack,
   downloadDocument,
+  importMicrosoftTeamChannels,
   importGoogleDriveFiles,
+  importSharePointFiles,
+  importSlackConversations,
+  listMicrosoftTeamChannels,
+  listMicrosoftTeams,
+  listSharePointDrives,
+  listSharePointFiles,
+  listSharePointSites,
+  listSlackConversations,
   listDocuments,
   listGoogleDriveFiles,
   listIntegrations,
+  type ConnectorImportResponse,
   uploadDocument,
   type GoogleDriveFile,
   type IntegrationStatus,
+  type MicrosoftChannel,
+  type MicrosoftTeam,
+  type SharePointDrive,
+  type SharePointFile,
+  type SharePointSite,
+  type SlackConversation,
   type SynapseDocument,
 } from "@/services/api";
 
 const acceptedFormats = ".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.vtt,.eml,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,.ogg";
 const maxUploadSizeBytes = 10 * 1024 * 1024;
-const googleStateKey = "synapse.google-drive.oauth-state";
+const oauthProviderKey = "synapse.integration.oauth-provider";
+const oauthStateKey = "synapse.integration.oauth-state";
 const googleVerifierKey = "synapse.google-drive.pkce-verifier";
+type CorporateProvider = "google_drive" | "slack" | "microsoft";
 
 export default function UploadPage() {
   const { session } = useSynapseSession();
@@ -42,6 +66,8 @@ export default function UploadPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isConnectingDrive, setIsConnectingDrive] = useState(false);
+  const [isConnectingSlack, setIsConnectingSlack] = useState(false);
+  const [isConnectingMicrosoft, setIsConnectingMicrosoft] = useState(false);
   const [isListingDriveFiles, setIsListingDriveFiles] = useState(false);
   const [isImportingDriveFiles, setIsImportingDriveFiles] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -88,38 +114,69 @@ export default function UploadPage() {
     }
 
     oauthReturnHandledRef.current = true;
-    const expectedState = window.sessionStorage.getItem(googleStateKey);
+    const provider = window.sessionStorage.getItem(oauthProviderKey) as CorporateProvider | null;
+    const expectedState = window.sessionStorage.getItem(oauthStateKey);
     const codeVerifier = window.sessionStorage.getItem(googleVerifierKey);
-    if (expectedState !== state || !codeVerifier) {
-      setError("Não foi possível validar o retorno do Google Drive. Inicie a conexão novamente.");
+    if (!provider || expectedState !== state || (provider === "google_drive" && !codeVerifier)) {
+      setError("Não foi possível validar o retorno da fonte corporativa. Inicie a conexão novamente.");
       router.replace("/upload");
       return;
     }
 
-    setIsConnectingDrive(true);
-    void completeGoogleDriveAuthorization({
-      accessToken: session.access_token,
-      code,
-      state,
-      codeVerifier,
-    })
-      .then((googleStatus) => {
-        setIntegrations((current) => replaceIntegrationStatus(current, googleStatus));
-        setMessage("Google Drive conectado com sucesso. Escolha uma pasta para importar arquivos.");
+    setIsConnectingDrive(provider === "google_drive");
+    setIsConnectingSlack(provider === "slack");
+    setIsConnectingMicrosoft(provider === "microsoft");
+    const completeAuthorization = provider === "google_drive"
+      ? completeGoogleDriveAuthorization({
+        accessToken: session.access_token,
+        code,
+        state,
+        codeVerifier: codeVerifier ?? "",
+      })
+      : provider === "slack"
+        ? completeSlackAuthorization({ accessToken: session.access_token, code, state })
+        : completeMicrosoftAuthorization({ accessToken: session.access_token, code, state });
+
+    void completeAuthorization
+      .then((integrationStatus) => {
+        setIntegrations((current) => (
+          provider === "microsoft"
+            ? replaceMicrosoftStatus(current, integrationStatus)
+            : replaceIntegrationStatus(current, integrationStatus)
+        ));
+        setMessage(
+          provider === "google_drive"
+            ? "Google Drive conectado com sucesso. Escolha uma pasta para importar arquivos."
+            : provider === "slack"
+              ? "Slack conectado com sucesso. Escolha os canais que deseja adicionar à base."
+              : "Microsoft 365 conectado com sucesso. Escolha conteúdo do Teams ou SharePoint.",
+        );
         setError(null);
       })
       .catch((nextError) => {
-        setError(nextError instanceof Error ? nextError.message : "Não foi possível concluir a conexão com o Google Drive.");
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Não foi possível concluir a conexão corporativa.",
+        );
       })
       .finally(() => {
-        window.sessionStorage.removeItem(googleStateKey);
+        window.sessionStorage.removeItem(oauthProviderKey);
+        window.sessionStorage.removeItem(oauthStateKey);
         window.sessionStorage.removeItem(googleVerifierKey);
         setIsConnectingDrive(false);
+        setIsConnectingSlack(false);
+        setIsConnectingMicrosoft(false);
         router.replace("/upload");
       });
   }, [router, searchParams, session.access_token]);
 
   const googleDrive = integrations.find((integration) => integration.provider === "google_drive");
+  const slack = integrations.find((integration) => integration.provider === "slack");
+  const microsoftTeams = integrations.find(
+    (integration) => integration.provider === "microsoft_teams",
+  );
+  const sharePoint = integrations.find((integration) => integration.provider === "sharepoint");
 
   async function handleUpload() {
     if (selectedFile === null || isUploading) {
@@ -168,7 +225,8 @@ export default function UploadPage() {
     setError(null);
     try {
       const authorization = await beginGoogleDriveAuthorization(session.access_token);
-      window.sessionStorage.setItem(googleStateKey, authorization.state);
+      window.sessionStorage.setItem(oauthProviderKey, "google_drive");
+      window.sessionStorage.setItem(oauthStateKey, authorization.state);
       window.sessionStorage.setItem(googleVerifierKey, authorization.code_verifier);
       window.location.assign(authorization.authorization_url);
     } catch (nextError) {
@@ -198,6 +256,86 @@ export default function UploadPage() {
       setError(nextError instanceof Error ? nextError.message : "Não foi possível desconectar o Google Drive.");
     } finally {
       setIsConnectingDrive(false);
+    }
+  }
+
+  async function handleSlackConnection() {
+    if (isConnectingSlack) {
+      return;
+    }
+    setIsConnectingSlack(true);
+    setError(null);
+    try {
+      const authorization = await beginSlackAuthorization(session.access_token);
+      window.sessionStorage.setItem(oauthProviderKey, "slack");
+      window.sessionStorage.setItem(oauthStateKey, authorization.state);
+      window.location.assign(authorization.authorization_url);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível iniciar o Slack.");
+      setIsConnectingSlack(false);
+    }
+  }
+
+  async function handleSlackDisconnect() {
+    if (isConnectingSlack) {
+      return;
+    }
+    setIsConnectingSlack(true);
+    setError(null);
+    try {
+      await disconnectSlack(session.access_token);
+      setIntegrations((current) => current.map((integration) => (
+        integration.provider === "slack"
+          ? { ...integration, connected: false, connected_at: null }
+          : integration
+      )));
+      setMessage("Slack desconectado. Os conteúdos já importados permanecem na sua base privada.");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível desconectar o Slack.");
+    } finally {
+      setIsConnectingSlack(false);
+    }
+  }
+
+  async function handleMicrosoftConnection() {
+    if (isConnectingMicrosoft) {
+      return;
+    }
+    setIsConnectingMicrosoft(true);
+    setError(null);
+    try {
+      const authorization = await beginMicrosoftAuthorization(session.access_token);
+      window.sessionStorage.setItem(oauthProviderKey, "microsoft");
+      window.sessionStorage.setItem(oauthStateKey, authorization.state);
+      window.location.assign(authorization.authorization_url);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : "Não foi possível iniciar a conexão Microsoft 365.",
+      );
+      setIsConnectingMicrosoft(false);
+    }
+  }
+
+  async function handleMicrosoftDisconnect() {
+    if (isConnectingMicrosoft) {
+      return;
+    }
+    setIsConnectingMicrosoft(true);
+    setError(null);
+    try {
+      await disconnectMicrosoft(session.access_token);
+      setIntegrations((current) => current.map((integration) => (
+        integration.provider === "microsoft_teams" || integration.provider === "sharepoint"
+          ? { ...integration, connected: false, connected_at: null }
+          : integration
+      )));
+      setMessage("Microsoft 365 desconectado. Os conteúdos já importados permanecem na sua base privada.");
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : "Não foi possível desconectar o Microsoft 365.",
+      );
+    } finally {
+      setIsConnectingMicrosoft(false);
     }
   }
 
@@ -260,6 +398,16 @@ export default function UploadPage() {
     }
   }
 
+  function handleConnectorImportResult(result: ConnectorImportResponse) {
+    setDocuments((current) => [...result.imported_documents, ...current]);
+    setMessage(result.message);
+    setError(
+      result.failures.length
+        ? result.failures.map((failure) => `${failure.filename}: ${failure.detail}`).join(" ")
+        : null,
+    );
+  }
+
   function toggleGoogleDriveFile(fileId: string) {
     setSelectedDriveFileIds((current) => (
       current.includes(fileId) ? current.filter((id) => id !== fileId) : [...current, fileId]
@@ -318,17 +466,20 @@ export default function UploadPage() {
             onDisconnect={() => void handleGoogleDriveDisconnect()}
           />
           <div className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-            {integrations.filter((integration) => integration.provider !== "google_drive").map((integration) => (
-              <article className="rounded-xl bg-slate-50 p-4" key={integration.provider}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold text-ink">{integration.label}</p>
-                  <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600">
-                    Em preparação
-                  </span>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-ink-soft">{integration.detail}</p>
-              </article>
-            ))}
+            <CorporateConnection
+              integration={slack}
+              isConnecting={isConnectingSlack}
+              onConnect={() => void handleSlackConnection()}
+              onDisconnect={() => void handleSlackDisconnect()}
+              title="Slack"
+            />
+            <CorporateConnection
+              integration={microsoftTeams}
+              isConnecting={isConnectingMicrosoft}
+              onConnect={() => void handleMicrosoftConnection()}
+              onDisconnect={() => void handleMicrosoftDisconnect()}
+              title="Microsoft 365"
+            />
           </div>
         </SectionCard>
       </div>
@@ -389,6 +540,22 @@ export default function UploadPage() {
             </div>
           ) : null}
         </SectionCard>
+      ) : null}
+
+      {slack?.connected ? (
+        <SlackImportPanel
+          accessToken={session.access_token}
+          onImported={handleConnectorImportResult}
+          onError={setError}
+        />
+      ) : null}
+
+      {microsoftTeams?.connected || sharePoint?.connected ? (
+        <MicrosoftImportPanel
+          accessToken={session.access_token}
+          onImported={handleConnectorImportResult}
+          onError={setError}
+        />
       ) : null}
 
       {message ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p> : null}
@@ -484,6 +651,394 @@ function GoogleDriveConnection({
   );
 }
 
+function CorporateConnection({
+  integration,
+  isConnecting,
+  onConnect,
+  onDisconnect,
+  title,
+}: {
+  integration: IntegrationStatus | undefined;
+  isConnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  title: string;
+}) {
+  const isAvailable = integration?.availability === "available";
+  return (
+    <article className="rounded-xl border border-slate-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-bold text-ink">{title}</p>
+          <p className="mt-1 text-sm leading-6 text-ink-soft">
+            {integration?.detail ?? "Verificando disponibilidade da conexão..."}
+          </p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${integration?.connected ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+          {integration?.connected ? "Conectado" : isAvailable ? "Disponível" : "Configuração pendente"}
+        </span>
+      </div>
+      {integration?.connected ? (
+        <button
+          className="mt-4 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-ink transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isConnecting}
+          onClick={onDisconnect}
+          type="button"
+        >
+          {isConnecting ? "Aguarde..." : "Desconectar"}
+        </button>
+      ) : (
+        <button
+          className="mt-4 rounded-lg bg-synapse-blue px-4 py-2 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!isAvailable || isConnecting}
+          onClick={onConnect}
+          type="button"
+        >
+          {isConnecting ? "Abrindo autorização..." : `Conectar ${title}`}
+        </button>
+      )}
+    </article>
+  );
+}
+
+function SlackImportPanel({
+  accessToken,
+  onImported,
+  onError,
+}: {
+  accessToken: string;
+  onImported: (result: ConnectorImportResponse) => void;
+  onError: (error: string | null) => void;
+}) {
+  const [conversations, setConversations] = useState<SlackConversation[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  async function loadConversations() {
+    setIsLoading(true);
+    onError(null);
+    try {
+      const nextConversations = await listSlackConversations(accessToken);
+      setConversations(nextConversations);
+      setSelectedIds([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível carregar os canais do Slack.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function importSelected() {
+    if (!selectedIds.length || isImporting) {
+      return;
+    }
+    setIsImporting(true);
+    onError(null);
+    try {
+      const result = await importSlackConversations({ accessToken, conversationIds: selectedIds });
+      onImported(result);
+      setSelectedIds([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível importar os canais do Slack.");
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  function toggleConversation(id: string) {
+    setSelectedIds((current) => (
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    ));
+  }
+
+  return (
+    <SectionCard
+      title="Importar do Slack"
+      description="Selecione canais que sua conta já pode acessar. O Synapse cria um registro privado por canal, sem publicar ou alterar mensagens."
+    >
+      <button
+        className="rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isLoading}
+        onClick={() => void loadConversations()}
+        type="button"
+      >
+        {isLoading ? "Carregando canais..." : "Buscar canais autorizados"}
+      </button>
+      {conversations.length ? (
+        <div className="mt-5 space-y-3">
+          {conversations.map((conversation) => (
+            <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-synapse-blue hover:bg-blue-50" key={conversation.id}>
+              <input
+                checked={selectedIds.includes(conversation.id)}
+                className="mt-1 h-4 w-4 accent-synapse-blue"
+                onChange={() => toggleConversation(conversation.id)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold text-ink">#{conversation.name}</span>
+                <span className="mt-1 block text-sm text-ink-soft">
+                  {conversation.is_private ? "Canal privado autorizado" : "Canal público"}
+                  {conversation.topic ? ` · ${conversation.topic}` : ""}
+                </span>
+              </span>
+            </label>
+          ))}
+          <button
+            className="rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!selectedIds.length || isImporting}
+            onClick={() => void importSelected()}
+            type="button"
+          >
+            {isImporting ? "Importando conversas..." : `Importar ${selectedIds.length} canal(is)`}
+          </button>
+        </div>
+      ) : null}
+    </SectionCard>
+  );
+}
+
+function MicrosoftImportPanel({
+  accessToken,
+  onImported,
+  onError,
+}: {
+  accessToken: string;
+  onImported: (result: ConnectorImportResponse) => void;
+  onError: (error: string | null) => void;
+}) {
+  const [teams, setTeams] = useState<MicrosoftTeam[]>([]);
+  const [teamId, setTeamId] = useState("");
+  const [channels, setChannels] = useState<MicrosoftChannel[]>([]);
+  const [selectedChannels, setSelectedChannels] = useState<MicrosoftChannel[]>([]);
+  const [sites, setSites] = useState<SharePointSite[]>([]);
+  const [siteId, setSiteId] = useState("");
+  const [drives, setDrives] = useState<SharePointDrive[]>([]);
+  const [driveId, setDriveId] = useState("");
+  const [folderId, setFolderId] = useState("");
+  const [files, setFiles] = useState<SharePointFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SharePointFile[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  async function loadTeams() {
+    setIsLoading(true);
+    onError(null);
+    try {
+      setTeams(await listMicrosoftTeams(accessToken));
+      setTeamId("");
+      setChannels([]);
+      setSelectedChannels([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível carregar as equipes.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function loadChannels() {
+    if (!teamId) {
+      return;
+    }
+    setIsLoading(true);
+    onError(null);
+    try {
+      setChannels(await listMicrosoftTeamChannels({ accessToken, teamId }));
+      setSelectedChannels([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível carregar os canais.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function importChannels() {
+    if (!teamId || !selectedChannels.length || isImporting) {
+      return;
+    }
+    setIsImporting(true);
+    onError(null);
+    try {
+      const result = await importMicrosoftTeamChannels({
+        accessToken,
+        teamId,
+        channels: selectedChannels,
+      });
+      onImported(result);
+      setSelectedChannels([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível importar os canais.");
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  async function loadSites() {
+    setIsLoading(true);
+    onError(null);
+    try {
+      setSites(await listSharePointSites(accessToken));
+      setSiteId("");
+      setDrives([]);
+      setDriveId("");
+      setFiles([]);
+      setSelectedFiles([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível carregar os sites.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function loadDrives() {
+    if (!siteId) {
+      return;
+    }
+    setIsLoading(true);
+    onError(null);
+    try {
+      setDrives(await listSharePointDrives({ accessToken, siteId }));
+      setDriveId("");
+      setFiles([]);
+      setSelectedFiles([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível carregar as bibliotecas.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function loadFiles(nextFolderId = "") {
+    if (!driveId) {
+      return;
+    }
+    setIsLoading(true);
+    onError(null);
+    try {
+      setFiles(await listSharePointFiles({ accessToken, driveId, folderId: nextFolderId }));
+      setFolderId(nextFolderId);
+      setSelectedFiles([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível carregar os arquivos.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function importFiles() {
+    if (!driveId || !selectedFiles.length || isImporting) {
+      return;
+    }
+    setIsImporting(true);
+    onError(null);
+    try {
+      const result = await importSharePointFiles({ accessToken, driveId, files: selectedFiles });
+      onImported(result);
+      setSelectedFiles([]);
+    } catch (nextError) {
+      onError(nextError instanceof Error ? nextError.message : "Não foi possível importar os arquivos.");
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  function toggleChannel(channel: MicrosoftChannel) {
+    setSelectedChannels((current) => (
+      current.some((item) => item.id === channel.id)
+        ? current.filter((item) => item.id !== channel.id)
+        : [...current, channel]
+    ));
+  }
+
+  function toggleFile(file: SharePointFile) {
+    setSelectedFiles((current) => (
+      current.some((item) => item.id === file.id)
+        ? current.filter((item) => item.id !== file.id)
+        : [...current, file]
+    ));
+  }
+
+  return (
+    <SectionCard
+      title="Importar do Microsoft 365"
+      description="A mesma conexão corporativa permite escolher histórico autorizado do Teams ou arquivos de uma biblioteca do SharePoint."
+    >
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-bold text-ink">Microsoft Teams</h3>
+          <p className="mt-1 text-sm leading-6 text-ink-soft">Escolha canais da equipe aos quais sua conta já pode acessar.</p>
+          <button className="mt-4 rounded-lg bg-synapse-blue px-4 py-2 text-sm font-black text-white disabled:opacity-60" disabled={isLoading} onClick={() => void loadTeams()} type="button">
+            {isLoading ? "Carregando..." : "Buscar equipes"}
+          </button>
+          {teams.length ? (
+            <div className="mt-4 space-y-3">
+              <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => setTeamId(event.target.value)} value={teamId}>
+                <option value="">Selecione uma equipe</option>
+                {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+              </select>
+              <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-ink disabled:opacity-60" disabled={!teamId || isLoading} onClick={() => void loadChannels()} type="button">Buscar canais</button>
+            </div>
+          ) : null}
+          {channels.length ? (
+            <div className="mt-4 space-y-2">
+              {channels.map((channel) => (
+                <label className="flex cursor-pointer gap-2 rounded-lg bg-slate-50 p-3 text-sm" key={channel.id}>
+                  <input checked={selectedChannels.some((item) => item.id === channel.id)} className="mt-1 accent-synapse-blue" onChange={() => toggleChannel(channel)} type="checkbox" />
+                  <span><strong>{channel.name}</strong>{channel.description ? ` · ${channel.description}` : ""}</span>
+                </label>
+              ))}
+              <button className="rounded-lg bg-synapse-blue px-4 py-2 text-sm font-black text-white disabled:opacity-60" disabled={!selectedChannels.length || isImporting} onClick={() => void importChannels()} type="button">
+                {isImporting ? "Importando..." : `Importar ${selectedChannels.length} canal(is)`}
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <div className="rounded-xl border border-slate-200 p-4">
+          <h3 className="font-bold text-ink">SharePoint</h3>
+          <p className="mt-1 text-sm leading-6 text-ink-soft">Navegue pelas bibliotecas compartilhadas e importe somente os arquivos selecionados.</p>
+          <button className="mt-4 rounded-lg bg-synapse-blue px-4 py-2 text-sm font-black text-white disabled:opacity-60" disabled={isLoading} onClick={() => void loadSites()} type="button">
+            {isLoading ? "Carregando..." : "Buscar sites"}
+          </button>
+          {sites.length ? (
+            <div className="mt-4 space-y-3">
+              <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => setSiteId(event.target.value)} value={siteId}>
+                <option value="">Selecione um site</option>
+                {sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
+              </select>
+              <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-ink disabled:opacity-60" disabled={!siteId || isLoading} onClick={() => void loadDrives()} type="button">Buscar bibliotecas</button>
+            </div>
+          ) : null}
+          {drives.length ? (
+            <div className="mt-4 space-y-3">
+              <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" onChange={(event) => setDriveId(event.target.value)} value={driveId}>
+                <option value="">Selecione uma biblioteca</option>
+                {drives.map((drive) => <option key={drive.id} value={drive.id}>{drive.name}</option>)}
+              </select>
+              <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-ink disabled:opacity-60" disabled={!driveId || isLoading} onClick={() => void loadFiles()} type="button">Buscar arquivos</button>
+            </div>
+          ) : null}
+          {files.length ? (
+            <div className="mt-4 space-y-2">
+              {folderId ? <button className="text-sm font-bold text-synapse-blue" onClick={() => void loadFiles("")} type="button">Voltar à raiz</button> : null}
+              {files.map((file) => file.is_folder ? (
+                <button className="block w-full rounded-lg bg-slate-50 p-3 text-left text-sm font-bold text-ink" key={file.id} onClick={() => void loadFiles(file.id)} type="button">Abrir pasta: {file.name}</button>
+              ) : (
+                <label className="flex cursor-pointer gap-2 rounded-lg bg-slate-50 p-3 text-sm" key={file.id}>
+                  <input checked={selectedFiles.some((item) => item.id === file.id)} className="mt-1 accent-synapse-blue" onChange={() => toggleFile(file)} type="checkbox" />
+                  <span><strong>{file.name}</strong>{file.size_bytes ? ` · ${formatBytes(file.size_bytes)}` : ""}</span>
+                </label>
+              ))}
+              <button className="rounded-lg bg-synapse-blue px-4 py-2 text-sm font-black text-white disabled:opacity-60" disabled={!selectedFiles.length || isImporting} onClick={() => void importFiles()} type="button">
+                {isImporting ? "Importando..." : `Importar ${selectedFiles.length} arquivo(s)`}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 function replaceIntegrationStatus(
   current: IntegrationStatus[],
   nextStatus: IntegrationStatus,
@@ -494,6 +1049,24 @@ function replaceIntegrationStatus(
       integration.provider === nextStatus.provider ? nextStatus : integration
     ))
     : [...current, nextStatus];
+}
+
+function replaceMicrosoftStatus(
+  current: IntegrationStatus[],
+  nextStatus: IntegrationStatus,
+): IntegrationStatus[] {
+  const providers = new Set(["microsoft_teams", "sharepoint"]);
+  return current.map((integration) => (
+    providers.has(integration.provider)
+      ? {
+        ...integration,
+        availability: nextStatus.availability,
+        connected: nextStatus.connected,
+        connected_at: nextStatus.connected_at,
+        detail: nextStatus.detail,
+      }
+      : integration
+  ));
 }
 
 function formatBytes(size: number): string {

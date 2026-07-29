@@ -96,6 +96,51 @@ from synapse_ai.services.integration_crypto import (
     decrypt_integration_credentials,
     encrypt_integration_credentials,
 )
+from synapse_ai.services.microsoft_connection_service import (
+    MicrosoftConnectionError,
+    disconnect_microsoft,
+    load_microsoft_credentials,
+    microsoft_connection_status,
+    save_microsoft_connection,
+)
+from synapse_ai.services.microsoft_graph_service import (
+    MicrosoftChannel,
+    MicrosoftGraphConnectorError,
+    MicrosoftTeam,
+    SharePointDrive,
+    SharePointFile,
+    SharePointSite,
+    download_microsoft_team_channel,
+    download_sharepoint_file,
+    list_microsoft_team_channels,
+    list_microsoft_teams,
+    list_sharepoint_drive_files,
+    list_sharepoint_drives,
+    list_sharepoint_sites,
+)
+from synapse_ai.services.microsoft_oauth_service import (
+    MicrosoftOAuthError,
+    build_microsoft_oauth_authorization_url,
+    exchange_microsoft_oauth_code,
+)
+from synapse_ai.services.slack_connection_service import (
+    SlackConnectionError,
+    disconnect_slack,
+    load_slack_credentials,
+    save_slack_connection,
+    slack_connection_status,
+)
+from synapse_ai.services.slack_oauth_service import (
+    SlackOAuthError,
+    build_slack_oauth_authorization_url,
+    exchange_slack_oauth_code,
+)
+from synapse_ai.services.slack_service import (
+    SlackConnectorError,
+    SlackConversation,
+    download_slack_conversation,
+    list_slack_conversations,
+)
 from synapse_ai.ui.copilot_page import CopilotMessage, _generate_copilot_answer
 
 logger = logging.getLogger(__name__)
@@ -200,6 +245,95 @@ class GoogleDriveImportFailure(BaseModel):
 class GoogleDriveImportResponse(BaseModel):
     imported_documents: list[DocumentResponse] = Field(default_factory=list)
     failures: list[GoogleDriveImportFailure] = Field(default_factory=list)
+    message: str
+
+
+class OAuthAuthorizationResponse(BaseModel):
+    authorization_url: str
+    state: str
+
+
+class OAuthCompletionRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: str = Field(min_length=16, max_length=512)
+
+
+class SlackConversationResponse(BaseModel):
+    id: str
+    name: str
+    is_private: bool
+    topic: str = ""
+
+
+class SlackImportRequest(BaseModel):
+    conversation_ids: list[str] = Field(min_length=1, max_length=10)
+    message_limit: int = Field(default=100, ge=1, le=200)
+
+
+class MicrosoftTeamResponse(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+
+
+class MicrosoftChannelResponse(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+
+
+class MicrosoftTeamChannelsRequest(BaseModel):
+    team_id: str = Field(min_length=1, max_length=512)
+
+
+class MicrosoftTeamsImportRequest(MicrosoftTeamChannelsRequest):
+    channels: list[MicrosoftChannelResponse] = Field(min_length=1, max_length=10)
+    message_limit: int = Field(default=100, ge=1, le=200)
+
+
+class SharePointSiteResponse(BaseModel):
+    id: str
+    name: str
+    web_url: str = ""
+
+
+class SharePointDriveResponse(BaseModel):
+    id: str
+    name: str
+    web_url: str = ""
+
+
+class SharePointDrivesRequest(BaseModel):
+    site_id: str = Field(min_length=1, max_length=1024)
+
+
+class SharePointFilesRequest(BaseModel):
+    drive_id: str = Field(min_length=1, max_length=1024)
+    folder_id: str = Field(default="", max_length=1024)
+
+
+class SharePointFileResponse(BaseModel):
+    id: str
+    name: str
+    mime_type: str
+    size_bytes: int | None = None
+    web_url: str = ""
+    is_folder: bool = False
+
+
+class SharePointImportRequest(BaseModel):
+    drive_id: str = Field(min_length=1, max_length=1024)
+    files: list[SharePointFileResponse] = Field(min_length=1, max_length=20)
+
+
+class ConnectorImportFailure(BaseModel):
+    filename: str
+    detail: str
+
+
+class ConnectorImportResponse(BaseModel):
+    imported_documents: list[DocumentResponse] = Field(default_factory=list)
+    failures: list[ConnectorImportFailure] = Field(default_factory=list)
     message: str
 
 
@@ -315,26 +449,48 @@ async def get_integrations(
                 }
             )
 
+    slack_status = _slack_status(request)
+    microsoft_status = _microsoft_status(request)
+    if slack_status.availability == "available":
+        try:
+            connection = await run_in_threadpool(
+                slack_connection_status, request.client, request.user.id
+            )
+            slack_status = slack_status.model_copy(
+                update={"connected": connection.connected, "connected_at": connection.connected_at}
+            )
+        except IntegrationConnectionError:
+            slack_status = slack_status.model_copy(
+                update={
+                    "availability": "needs_configuration",
+                    "detail": "A base segura de conexões ainda precisa ser preparada no servidor.",
+                }
+            )
+    if microsoft_status.availability == "available":
+        try:
+            connection = await run_in_threadpool(
+                microsoft_connection_status,
+                request.client,
+                request.user.id,
+            )
+            microsoft_status = microsoft_status.model_copy(
+                update={"connected": connection.connected, "connected_at": connection.connected_at}
+            )
+        except IntegrationConnectionError:
+            microsoft_status = microsoft_status.model_copy(
+                update={
+                    "availability": "needs_configuration",
+                    "detail": "A base segura de conexões ainda precisa ser preparada no servidor.",
+                }
+            )
+
     return [
         google_status,
-        IntegrationStatusResponse(
-            provider="slack",
-            label="Slack",
-            availability="coming_soon",
-            detail="Por enquanto, importe exportações do Slack em JSON pela área de arquivos.",
+        slack_status,
+        microsoft_status.model_copy(
+            update={"provider": "microsoft_teams", "label": "Microsoft Teams"}
         ),
-        IntegrationStatusResponse(
-            provider="microsoft_teams",
-            label="Microsoft Teams",
-            availability="coming_soon",
-            detail="Por enquanto, importe exportações do Teams em JSON ou transcrições VTT.",
-        ),
-        IntegrationStatusResponse(
-            provider="sharepoint",
-            label="SharePoint",
-            availability="coming_soon",
-            detail="A conexão via Microsoft Graph será liberada após o registro OAuth corporativo.",
-        ),
+        microsoft_status.model_copy(update={"provider": "sharepoint", "label": "SharePoint"}),
     ]
 
 
@@ -517,6 +673,402 @@ async def import_google_drive_files(
         failures=failures,
         message=message,
     )
+
+
+@app.post("/api/integrations/slack/authorization", response_model=OAuthAuthorizationResponse)
+async def begin_slack_authorization(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> OAuthAuthorizationResponse:
+    """Start a Slack OAuth consent flow bound to the authenticated Synapse account."""
+    _require_slack_configuration(request)
+    state = _build_integration_oauth_state("slack", request)
+    try:
+        authorization_url = build_slack_oauth_authorization_url(
+            request.config.slack.client_id,
+            request.config.slack.redirect_uri,
+            state,
+        )
+    except SlackOAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    return OAuthAuthorizationResponse(authorization_url=authorization_url, state=state)
+
+
+@app.post("/api/integrations/slack/complete", response_model=IntegrationStatusResponse)
+async def complete_slack_authorization(
+    payload: OAuthCompletionRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> IntegrationStatusResponse:
+    _require_slack_configuration(request)
+    try:
+        _validate_integration_oauth_state("slack", payload.state, request)
+        tokens = await run_in_threadpool(
+            exchange_slack_oauth_code,
+            request.config.slack.client_id,
+            request.config.slack.client_secret,
+            request.config.slack.redirect_uri,
+            payload.code,
+        )
+        connection = await run_in_threadpool(
+            save_slack_connection,
+            request.client,
+            request.user.id,
+            tokens,
+            connector_encryption_key(),
+        )
+    except (
+        SlackOAuthError,
+        SlackConnectionError,
+        IntegrationConnectionError,
+        IntegrationCredentialError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    return IntegrationStatusResponse(
+        provider="slack",
+        label="Slack",
+        availability="available",
+        connected=connection.connected,
+        connected_at=connection.connected_at,
+        detail="Slack conectado com acesso somente leitura aos canais autorizados.",
+    )
+
+
+@app.delete("/api/integrations/slack", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_slack_connection(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> None:
+    try:
+        await run_in_threadpool(disconnect_slack, request.client, request.user.id)
+    except IntegrationConnectionError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@app.get("/api/integrations/slack/conversations", response_model=list[SlackConversationResponse])
+async def get_slack_conversations(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[SlackConversationResponse]:
+    credentials = await _load_slack_credentials(request)
+    try:
+        conversations = await run_in_threadpool(list_slack_conversations, credentials)
+    except SlackConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_slack_conversation_response(conversation) for conversation in conversations]
+
+
+@app.post("/api/integrations/slack/import", response_model=ConnectorImportResponse)
+async def import_slack_conversations(
+    payload: SlackImportRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> ConnectorImportResponse:
+    credentials = await _load_slack_credentials(request)
+    try:
+        available = await run_in_threadpool(list_slack_conversations, credentials)
+    except SlackConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    conversations_by_id = {conversation.id: conversation for conversation in available}
+    selected_ids = list(
+        dict.fromkeys(conversation_id.strip() for conversation_id in payload.conversation_ids)
+    )
+    selected = [
+        conversations_by_id[item_id] for item_id in selected_ids if item_id in conversations_by_id
+    ]
+    if len(selected) != len(selected_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Um ou mais canais não estão mais disponíveis para a conta conectada.",
+        )
+
+    imported_documents: list[DocumentResponse] = []
+    failures: list[ConnectorImportFailure] = []
+    for conversation in selected:
+        try:
+            downloaded = await run_in_threadpool(
+                download_slack_conversation,
+                credentials,
+                conversation,
+                message_limit=payload.message_limit,
+            )
+            document, _original_file_available = await _persist_uploaded_document(
+                request,
+                UploadedDocument(
+                    filename=downloaded.filename,
+                    content_type="application/json",
+                    content=downloaded.content,
+                ),
+                source_metadata={
+                    "source_provider": "slack",
+                    "source_conversation_id": conversation.id,
+                    "source_conversation_name": conversation.name,
+                    "source_message_count": downloaded.message_count,
+                },
+            )
+            imported_documents.append(document)
+        except HTTPException as exc:
+            failures.append(
+                ConnectorImportFailure(filename=conversation.name, detail=str(exc.detail))
+            )
+        except (
+            DocumentProcessingError,
+            DocumentPersistenceError,
+            DocumentStorageError,
+            SlackConnectorError,
+        ) as exc:
+            failures.append(ConnectorImportFailure(filename=conversation.name, detail=str(exc)))
+    return _connector_import_response("Slack", imported_documents, failures)
+
+
+@app.post("/api/integrations/microsoft/authorization", response_model=OAuthAuthorizationResponse)
+async def begin_microsoft_authorization(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> OAuthAuthorizationResponse:
+    """Start one Microsoft Graph connection used by Teams and SharePoint."""
+    _require_microsoft_configuration(request)
+    state = _build_integration_oauth_state("microsoft_graph", request)
+    try:
+        authorization_url = build_microsoft_oauth_authorization_url(
+            request.config.microsoft.tenant_id,
+            request.config.microsoft.client_id,
+            request.config.microsoft.redirect_uri,
+            state,
+        )
+    except MicrosoftOAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    return OAuthAuthorizationResponse(authorization_url=authorization_url, state=state)
+
+
+@app.post("/api/integrations/microsoft/complete", response_model=IntegrationStatusResponse)
+async def complete_microsoft_authorization(
+    payload: OAuthCompletionRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> IntegrationStatusResponse:
+    _require_microsoft_configuration(request)
+    try:
+        _validate_integration_oauth_state("microsoft_graph", payload.state, request)
+        tokens = await run_in_threadpool(
+            exchange_microsoft_oauth_code,
+            request.config.microsoft.tenant_id,
+            request.config.microsoft.client_id,
+            request.config.microsoft.client_secret,
+            request.config.microsoft.redirect_uri,
+            payload.code,
+        )
+        connection = await run_in_threadpool(
+            save_microsoft_connection,
+            request.client,
+            request.user.id,
+            tokens,
+            connector_encryption_key(),
+        )
+    except (
+        MicrosoftOAuthError,
+        MicrosoftConnectionError,
+        IntegrationConnectionError,
+        IntegrationCredentialError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    return IntegrationStatusResponse(
+        provider="microsoft_teams",
+        label="Microsoft 365",
+        availability="available",
+        connected=connection.connected,
+        connected_at=connection.connected_at,
+        detail=(
+            "Microsoft 365 conectado com acesso somente leitura ao Teams e ao "
+            "SharePoint autorizados."
+        ),
+    )
+
+
+@app.delete("/api/integrations/microsoft", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_microsoft_connection(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> None:
+    try:
+        await run_in_threadpool(disconnect_microsoft, request.client, request.user.id)
+    except IntegrationConnectionError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@app.get("/api/integrations/microsoft/teams", response_model=list[MicrosoftTeamResponse])
+async def get_microsoft_teams(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[MicrosoftTeamResponse]:
+    credentials = await _load_microsoft_credentials(request)
+    try:
+        teams = await run_in_threadpool(list_microsoft_teams, credentials)
+    except MicrosoftGraphConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_microsoft_team_response(team) for team in teams]
+
+
+@app.post(
+    "/api/integrations/microsoft/teams/channels", response_model=list[MicrosoftChannelResponse]
+)
+async def get_microsoft_team_channels(
+    payload: MicrosoftTeamChannelsRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[MicrosoftChannelResponse]:
+    credentials = await _load_microsoft_credentials(request)
+    try:
+        channels = await run_in_threadpool(
+            list_microsoft_team_channels, credentials, payload.team_id
+        )
+    except MicrosoftGraphConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_microsoft_channel_response(channel) for channel in channels]
+
+
+@app.post("/api/integrations/microsoft/teams/import", response_model=ConnectorImportResponse)
+async def import_microsoft_team_channels(
+    payload: MicrosoftTeamsImportRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> ConnectorImportResponse:
+    credentials = await _load_microsoft_credentials(request)
+    imported_documents: list[DocumentResponse] = []
+    failures: list[ConnectorImportFailure] = []
+    for channel_payload in payload.channels:
+        channel = MicrosoftChannel(
+            id=channel_payload.id,
+            name=channel_payload.name,
+            description=channel_payload.description,
+        )
+        try:
+            downloaded = await run_in_threadpool(
+                download_microsoft_team_channel,
+                credentials,
+                payload.team_id,
+                channel,
+                message_limit=payload.message_limit,
+            )
+            document, _original_file_available = await _persist_uploaded_document(
+                request,
+                UploadedDocument(
+                    filename=downloaded.filename,
+                    content_type=downloaded.content_type,
+                    content=downloaded.content,
+                ),
+                source_metadata={
+                    "source_provider": "microsoft_teams",
+                    "source_team_id": payload.team_id,
+                    "source_channel_id": channel.id,
+                    "source_channel_name": channel.name,
+                },
+            )
+            imported_documents.append(document)
+        except HTTPException as exc:
+            failures.append(ConnectorImportFailure(filename=channel.name, detail=str(exc.detail)))
+        except (
+            DocumentProcessingError,
+            DocumentPersistenceError,
+            DocumentStorageError,
+            MicrosoftGraphConnectorError,
+        ) as exc:
+            failures.append(ConnectorImportFailure(filename=channel.name, detail=str(exc)))
+    return _connector_import_response("Microsoft Teams", imported_documents, failures)
+
+
+@app.get(
+    "/api/integrations/microsoft/sharepoint/sites", response_model=list[SharePointSiteResponse]
+)
+async def get_sharepoint_sites(
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[SharePointSiteResponse]:
+    credentials = await _load_microsoft_credentials(request)
+    try:
+        sites = await run_in_threadpool(list_sharepoint_sites, credentials)
+    except MicrosoftGraphConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_sharepoint_site_response(site) for site in sites]
+
+
+@app.post(
+    "/api/integrations/microsoft/sharepoint/drives", response_model=list[SharePointDriveResponse]
+)
+async def get_sharepoint_drives(
+    payload: SharePointDrivesRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[SharePointDriveResponse]:
+    credentials = await _load_microsoft_credentials(request)
+    try:
+        drives = await run_in_threadpool(list_sharepoint_drives, credentials, payload.site_id)
+    except MicrosoftGraphConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_sharepoint_drive_response(drive) for drive in drives]
+
+
+@app.post(
+    "/api/integrations/microsoft/sharepoint/files", response_model=list[SharePointFileResponse]
+)
+async def get_sharepoint_files(
+    payload: SharePointFilesRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> list[SharePointFileResponse]:
+    credentials = await _load_microsoft_credentials(request)
+    try:
+        files = await run_in_threadpool(
+            list_sharepoint_drive_files,
+            credentials,
+            payload.drive_id,
+            folder_id=payload.folder_id,
+        )
+    except MicrosoftGraphConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [_sharepoint_file_response(file) for file in files]
+
+
+@app.post("/api/integrations/microsoft/sharepoint/import", response_model=ConnectorImportResponse)
+async def import_sharepoint_files(
+    payload: SharePointImportRequest,
+    request: AuthenticatedRequest = _authenticated_request,
+) -> ConnectorImportResponse:
+    credentials = await _load_microsoft_credentials(request)
+    imported_documents: list[DocumentResponse] = []
+    failures: list[ConnectorImportFailure] = []
+    for file_payload in payload.files:
+        file = SharePointFile(
+            id=file_payload.id,
+            name=file_payload.name,
+            mime_type=file_payload.mime_type,
+            size_bytes=file_payload.size_bytes,
+            web_url=file_payload.web_url,
+            is_folder=file_payload.is_folder,
+        )
+        try:
+            downloaded = await run_in_threadpool(
+                download_sharepoint_file, credentials, payload.drive_id, file
+            )
+            document, _original_file_available = await _persist_uploaded_document(
+                request,
+                UploadedDocument(
+                    filename=downloaded.filename,
+                    content_type=downloaded.content_type,
+                    content=downloaded.content,
+                ),
+                source_metadata={
+                    "source_provider": "sharepoint",
+                    "source_drive_id": payload.drive_id,
+                    "source_file_id": file.id,
+                    "source_web_view_link": file.web_url,
+                },
+            )
+            imported_documents.append(document)
+        except HTTPException as exc:
+            failures.append(ConnectorImportFailure(filename=file.name, detail=str(exc.detail)))
+        except (
+            DocumentProcessingError,
+            DocumentPersistenceError,
+            DocumentStorageError,
+            MicrosoftGraphConnectorError,
+        ) as exc:
+            failures.append(ConnectorImportFailure(filename=file.name, detail=str(exc)))
+    return _connector_import_response("SharePoint", imported_documents, failures)
 
 
 @app.get("/api/studio/documents", response_model=list[StudioDocumentResponse])
@@ -807,8 +1359,7 @@ async def ask_copilot(
     request: AuthenticatedRequest = _authenticated_request,
 ) -> CopilotResponse:
     messages = [
-        CopilotMessage(role=message.role, content=message.content)
-        for message in payload.messages
+        CopilotMessage(role=message.role, content=message.content) for message in payload.messages
     ]
     if payload.prompt and payload.prompt.strip():
         messages.append(CopilotMessage(role="user", content=payload.prompt.strip()))
@@ -828,6 +1379,216 @@ async def ask_copilot(
         openai_client=openai_client,
     )
     return CopilotResponse(answer=answer, model=model)
+
+
+def _slack_status(request: AuthenticatedRequest) -> IntegrationStatusResponse:
+    if not _slack_is_configured(request):
+        return IntegrationStatusResponse(
+            provider="slack",
+            label="Slack",
+            availability="needs_configuration",
+            detail="O Slack precisa concluir a configuração segura do servidor antes da conexão.",
+        )
+    return IntegrationStatusResponse(
+        provider="slack",
+        label="Slack",
+        availability="available",
+        detail=(
+            "Conecte uma área de trabalho para importar canais aos quais sua conta já tem acesso."
+        ),
+    )
+
+
+def _microsoft_status(request: AuthenticatedRequest) -> IntegrationStatusResponse:
+    if not _microsoft_is_configured(request):
+        return IntegrationStatusResponse(
+            provider="microsoft_teams",
+            label="Microsoft 365",
+            availability="needs_configuration",
+            detail=(
+                "Teams e SharePoint precisam concluir o registro OAuth corporativo antes "
+                "da conexão."
+            ),
+        )
+    return IntegrationStatusResponse(
+        provider="microsoft_teams",
+        label="Microsoft 365",
+        availability="available",
+        detail=(
+            "Conecte uma conta Microsoft 365 para importar conteúdo autorizado do Teams "
+            "e SharePoint."
+        ),
+    )
+
+
+def _slack_is_configured(request: AuthenticatedRequest) -> bool:
+    settings = request.config.slack
+    return bool(
+        settings.client_id.strip()
+        and settings.client_secret.strip()
+        and settings.redirect_uri.strip()
+        and connector_encryption_key()
+    )
+
+
+def _microsoft_is_configured(request: AuthenticatedRequest) -> bool:
+    settings = request.config.microsoft
+    return bool(
+        settings.tenant_id.strip()
+        and settings.client_id.strip()
+        and settings.client_secret.strip()
+        and settings.redirect_uri.strip()
+        and connector_encryption_key()
+    )
+
+
+def _require_slack_configuration(request: AuthenticatedRequest) -> None:
+    if not _slack_is_configured(request):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "O Slack ainda não foi configurado no servidor. Finalize as credenciais "
+                "OAuth e o endereço de retorno."
+            ),
+        )
+
+
+def _require_microsoft_configuration(request: AuthenticatedRequest) -> None:
+    if not _microsoft_is_configured(request):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "O Microsoft 365 ainda não foi configurado no servidor. Finalize o registro OAuth, "
+                "as permissões e o endereço de retorno."
+            ),
+        )
+
+
+def _build_integration_oauth_state(provider: str, request: AuthenticatedRequest) -> str:
+    """Mint opaque state that binds a provider callback to exactly one Synapse account."""
+    try:
+        return encrypt_integration_credentials(
+            {"provider": provider, "user_id": request.user.id},
+            connector_encryption_key(),
+        )
+    except IntegrationCredentialError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Não foi possível preparar a conexão corporativa segura.",
+        ) from exc
+
+
+def _validate_integration_oauth_state(
+    provider: str,
+    oauth_state: str,
+    request: AuthenticatedRequest,
+) -> None:
+    try:
+        state_payload = decrypt_integration_credentials(oauth_state, connector_encryption_key())
+    except IntegrationCredentialError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O retorno corporativo não corresponde a uma conexão válida.",
+        ) from exc
+    if state_payload.get("provider") != provider or state_payload.get("user_id") != request.user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O retorno corporativo pertence a outra conta.",
+        )
+
+
+async def _load_slack_credentials(request: AuthenticatedRequest):
+    _require_slack_configuration(request)
+    try:
+        return await run_in_threadpool(
+            load_slack_credentials,
+            request.client,
+            request.user.id,
+            connector_encryption_key(),
+            request.config.slack.client_id,
+            request.config.slack.client_secret,
+        )
+    except (SlackConnectionError, IntegrationConnectionError, IntegrationCredentialError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+async def _load_microsoft_credentials(request: AuthenticatedRequest):
+    _require_microsoft_configuration(request)
+    try:
+        return await run_in_threadpool(
+            load_microsoft_credentials,
+            request.client,
+            request.user.id,
+            connector_encryption_key(),
+            request.config.microsoft.tenant_id,
+            request.config.microsoft.client_id,
+            request.config.microsoft.client_secret,
+        )
+    except (
+        MicrosoftConnectionError,
+        IntegrationConnectionError,
+        IntegrationCredentialError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+def _slack_conversation_response(conversation: SlackConversation) -> SlackConversationResponse:
+    return SlackConversationResponse(
+        id=conversation.id,
+        name=conversation.name,
+        is_private=conversation.is_private,
+        topic=conversation.topic,
+    )
+
+
+def _microsoft_team_response(team: MicrosoftTeam) -> MicrosoftTeamResponse:
+    return MicrosoftTeamResponse(id=team.id, name=team.name, description=team.description)
+
+
+def _microsoft_channel_response(channel: MicrosoftChannel) -> MicrosoftChannelResponse:
+    return MicrosoftChannelResponse(
+        id=channel.id, name=channel.name, description=channel.description
+    )
+
+
+def _sharepoint_site_response(site: SharePointSite) -> SharePointSiteResponse:
+    return SharePointSiteResponse(id=site.id, name=site.name, web_url=site.web_url)
+
+
+def _sharepoint_drive_response(drive: SharePointDrive) -> SharePointDriveResponse:
+    return SharePointDriveResponse(id=drive.id, name=drive.name, web_url=drive.web_url)
+
+
+def _sharepoint_file_response(file: SharePointFile) -> SharePointFileResponse:
+    return SharePointFileResponse(
+        id=file.id,
+        name=file.name,
+        mime_type=file.mime_type,
+        size_bytes=file.size_bytes,
+        web_url=file.web_url,
+        is_folder=file.is_folder,
+    )
+
+
+def _connector_import_response(
+    provider_label: str,
+    imported_documents: list[DocumentResponse],
+    failures: list[ConnectorImportFailure],
+) -> ConnectorImportResponse:
+    message = (
+        f"{len(imported_documents)} item(ns) importado(s) do {provider_label}."
+        if imported_documents
+        else f"Nenhum item do {provider_label} foi importado."
+    )
+    return ConnectorImportResponse(
+        imported_documents=imported_documents,
+        failures=failures,
+        message=message,
+    )
 
 
 def _google_drive_status(request: AuthenticatedRequest) -> IntegrationStatusResponse:

@@ -36,6 +36,21 @@ class GoogleDriveSettings:
 
 
 @dataclass(frozen=True)
+class SlackSettings:
+    client_id: str = field(default="", repr=False)
+    client_secret: str = field(default="", repr=False)
+    redirect_uri: str = "http://localhost:3000/upload"
+
+
+@dataclass(frozen=True)
+class MicrosoftSettings:
+    tenant_id: str = field(default="organizations", repr=False)
+    client_id: str = field(default="", repr=False)
+    client_secret: str = field(default="", repr=False)
+    redirect_uri: str = "http://localhost:3000/upload"
+
+
+@dataclass(frozen=True)
 class AppSettings:
     public_url: str = "http://localhost:8501"
 
@@ -46,6 +61,8 @@ class AppConfig:
     openai: OpenAISettings
     google_drive: GoogleDriveSettings
     app: AppSettings
+    slack: SlackSettings = field(default_factory=SlackSettings)
+    microsoft: MicrosoftSettings = field(default_factory=MicrosoftSettings)
 
 
 def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
@@ -59,6 +76,22 @@ def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
             "google_drive",
             "redirect_uri",
             "http://localhost:8501",
+        ),
+    )
+    slack = SlackSettings(
+        client_id=_optional(source, "slack", "client_id", ""),
+        client_secret=_optional(source, "slack", "client_secret", ""),
+        redirect_uri=_optional(source, "slack", "redirect_uri", "http://localhost:3000/upload"),
+    )
+    microsoft = MicrosoftSettings(
+        tenant_id=_optional(source, "microsoft", "tenant_id", "organizations"),
+        client_id=_optional(source, "microsoft", "client_id", ""),
+        client_secret=_optional(source, "microsoft", "client_secret", ""),
+        redirect_uri=_optional(
+            source,
+            "microsoft",
+            "redirect_uri",
+            "http://localhost:3000/upload",
         ),
     )
     return AppConfig(
@@ -86,6 +119,8 @@ def load_config(secrets: Mapping[str, Any] | None = None) -> AppConfig:
         app=AppSettings(
             public_url=_optional(source, "app", "public_url", google_drive.redirect_uri),
         ),
+        slack=slack,
+        microsoft=microsoft,
     )
 
 

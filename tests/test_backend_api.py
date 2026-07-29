@@ -126,7 +126,9 @@ def test_integrations_returns_an_account_scoped_google_drive_status(monkeypatch)
     assert response.status_code == 200
     integrations = {item["provider"]: item for item in response.json()}
     assert integrations["google_drive"]["connected"] is True
-    assert integrations["slack"]["availability"] == "coming_soon"
+    assert integrations["slack"]["availability"] == "needs_configuration"
+    assert integrations["microsoft_teams"]["availability"] == "needs_configuration"
+    assert integrations["sharepoint"]["availability"] == "needs_configuration"
 
 
 def test_google_drive_authorization_and_completion_are_bound_to_the_account(monkeypatch) -> None:

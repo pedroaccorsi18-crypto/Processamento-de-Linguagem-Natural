@@ -88,6 +88,57 @@ export type GoogleDriveImportResponse = {
   message: string;
 };
 
+export type OAuthAuthorization = {
+  authorization_url: string;
+  state: string;
+};
+
+export type ConnectorImportResponse = {
+  imported_documents: SynapseDocument[];
+  failures: Array<{ filename: string; detail: string }>;
+  message: string;
+};
+
+export type SlackConversation = {
+  id: string;
+  name: string;
+  is_private: boolean;
+  topic: string;
+};
+
+export type MicrosoftTeam = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type MicrosoftChannel = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type SharePointSite = {
+  id: string;
+  name: string;
+  web_url: string;
+};
+
+export type SharePointDrive = {
+  id: string;
+  name: string;
+  web_url: string;
+};
+
+export type SharePointFile = {
+  id: string;
+  name: string;
+  mime_type: string;
+  size_bytes: number | null;
+  web_url: string;
+  is_folder: boolean;
+};
+
 type CopilotResponse = {
   answer: string;
   model: string;
@@ -401,4 +452,253 @@ export async function importGoogleDriveFiles(input: {
     throw await responseError(response, "Não foi possível importar os arquivos do Google Drive.");
   }
   return (await response.json()) as GoogleDriveImportResponse;
+}
+
+export async function beginSlackAuthorization(accessToken: string): Promise<OAuthAuthorization> {
+  const response = await fetchApi(
+    "/api/integrations/slack/authorization",
+    accessToken,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível iniciar a conexão com o Slack.");
+  }
+  return (await response.json()) as OAuthAuthorization;
+}
+
+export async function completeSlackAuthorization(input: {
+  accessToken: string;
+  code: string;
+  state: string;
+}): Promise<IntegrationStatus> {
+  return completeConnectorAuthorization("slack", input, "Slack");
+}
+
+export async function disconnectSlack(accessToken: string): Promise<void> {
+  return disconnectConnector("slack", accessToken, "Slack");
+}
+
+export async function listSlackConversations(accessToken: string): Promise<SlackConversation[]> {
+  const response = await fetchApi("/api/integrations/slack/conversations", accessToken, {
+    headers: { Accept: "application/json" },
+  }, CONNECTOR_REQUEST_TIMEOUT_MS);
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar os canais do Slack.");
+  }
+  return (await response.json()) as SlackConversation[];
+}
+
+export async function importSlackConversations(input: {
+  accessToken: string;
+  conversationIds: string[];
+  messageLimit?: number;
+}): Promise<ConnectorImportResponse> {
+  const response = await fetchApi(
+    "/api/integrations/slack/import",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_ids: input.conversationIds,
+        message_limit: input.messageLimit ?? 100,
+      }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível importar os canais do Slack.");
+  }
+  return (await response.json()) as ConnectorImportResponse;
+}
+
+export async function beginMicrosoftAuthorization(
+  accessToken: string,
+): Promise<OAuthAuthorization> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/authorization",
+    accessToken,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível iniciar a conexão Microsoft 365.");
+  }
+  return (await response.json()) as OAuthAuthorization;
+}
+
+export async function completeMicrosoftAuthorization(input: {
+  accessToken: string;
+  code: string;
+  state: string;
+}): Promise<IntegrationStatus> {
+  return completeConnectorAuthorization("microsoft", input, "Microsoft 365");
+}
+
+export async function disconnectMicrosoft(accessToken: string): Promise<void> {
+  return disconnectConnector("microsoft", accessToken, "Microsoft 365");
+}
+
+export async function listMicrosoftTeams(accessToken: string): Promise<MicrosoftTeam[]> {
+  const response = await fetchApi("/api/integrations/microsoft/teams", accessToken, {
+    headers: { Accept: "application/json" },
+  }, CONNECTOR_REQUEST_TIMEOUT_MS);
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar as equipes do Microsoft Teams.");
+  }
+  return (await response.json()) as MicrosoftTeam[];
+}
+
+export async function listMicrosoftTeamChannels(input: {
+  accessToken: string;
+  teamId: string;
+}): Promise<MicrosoftChannel[]> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/teams/channels",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team_id: input.teamId }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar os canais desta equipe.");
+  }
+  return (await response.json()) as MicrosoftChannel[];
+}
+
+export async function importMicrosoftTeamChannels(input: {
+  accessToken: string;
+  teamId: string;
+  channels: MicrosoftChannel[];
+  messageLimit?: number;
+}): Promise<ConnectorImportResponse> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/teams/import",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        team_id: input.teamId,
+        channels: input.channels,
+        message_limit: input.messageLimit ?? 100,
+      }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível importar os canais do Microsoft Teams.");
+  }
+  return (await response.json()) as ConnectorImportResponse;
+}
+
+export async function listSharePointSites(accessToken: string): Promise<SharePointSite[]> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/sharepoint/sites",
+    accessToken,
+    { headers: { Accept: "application/json" } },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar os sites do SharePoint.");
+  }
+  return (await response.json()) as SharePointSite[];
+}
+
+export async function listSharePointDrives(input: {
+  accessToken: string;
+  siteId: string;
+}): Promise<SharePointDrive[]> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/sharepoint/drives",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site_id: input.siteId }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar as bibliotecas do SharePoint.");
+  }
+  return (await response.json()) as SharePointDrive[];
+}
+
+export async function listSharePointFiles(input: {
+  accessToken: string;
+  driveId: string;
+  folderId?: string;
+}): Promise<SharePointFile[]> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/sharepoint/files",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drive_id: input.driveId, folder_id: input.folderId ?? "" }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível listar os arquivos do SharePoint.");
+  }
+  return (await response.json()) as SharePointFile[];
+}
+
+export async function importSharePointFiles(input: {
+  accessToken: string;
+  driveId: string;
+  files: SharePointFile[];
+}): Promise<ConnectorImportResponse> {
+  const response = await fetchApi(
+    "/api/integrations/microsoft/sharepoint/import",
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drive_id: input.driveId, files: input.files }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, "Não foi possível importar os arquivos do SharePoint.");
+  }
+  return (await response.json()) as ConnectorImportResponse;
+}
+
+async function completeConnectorAuthorization(
+  provider: "slack" | "microsoft",
+  input: { accessToken: string; code: string; state: string },
+  label: string,
+): Promise<IntegrationStatus> {
+  const response = await fetchApi(
+    `/api/integrations/${provider}/complete`,
+    input.accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: input.code, state: input.state }),
+    },
+    CONNECTOR_REQUEST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw await responseError(response, `Não foi possível concluir a conexão ${label}.`);
+  }
+  return (await response.json()) as IntegrationStatus;
+}
+
+async function disconnectConnector(
+  provider: "slack" | "microsoft",
+  accessToken: string,
+  label: string,
+): Promise<void> {
+  const response = await fetchApi(`/api/integrations/${provider}`, accessToken, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await responseError(response, `Não foi possível desconectar ${label}.`);
+  }
 }

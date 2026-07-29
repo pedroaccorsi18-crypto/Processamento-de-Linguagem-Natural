@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AuthGate, useSynapseSession } from "@/components/auth-gate";
@@ -15,6 +16,10 @@ const navigationItems = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  if (pathname === "/about" || pathname === "/privacy" || pathname === "/terms") {
+    return <div className="min-h-screen bg-surface-subtle">{children}</div>;
+  }
   return (
     <AuthGate>
       <AuthenticatedAppShell>{children}</AuthenticatedAppShell>

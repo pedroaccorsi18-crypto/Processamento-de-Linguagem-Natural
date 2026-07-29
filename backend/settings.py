@@ -69,6 +69,13 @@ def _apply_environment_overrides(source: dict[str, Any]) -> None:
         "GOOGLE_DRIVE_CLIENT_SECRET",
     )
     _set_nested_if_present(source, "google_drive", "redirect_uri", "GOOGLE_DRIVE_REDIRECT_URI")
+    _set_nested_if_present(source, "slack", "client_id", "SLACK_CLIENT_ID")
+    _set_nested_if_present(source, "slack", "client_secret", "SLACK_CLIENT_SECRET")
+    _set_nested_if_present(source, "slack", "redirect_uri", "SLACK_REDIRECT_URI")
+    _set_nested_if_present(source, "microsoft", "tenant_id", "MICROSOFT_TENANT_ID")
+    _set_nested_if_present(source, "microsoft", "client_id", "MICROSOFT_CLIENT_ID")
+    _set_nested_if_present(source, "microsoft", "client_secret", "MICROSOFT_CLIENT_SECRET")
+    _set_nested_if_present(source, "microsoft", "redirect_uri", "MICROSOFT_REDIRECT_URI")
     _set_nested_if_present(source, "app", "public_url", "APP_PUBLIC_URL")
 
 

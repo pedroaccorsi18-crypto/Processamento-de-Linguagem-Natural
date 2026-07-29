@@ -17,3 +17,11 @@ services:
         sync: false
       - key: OPENAI_GENERATION_MODEL
         sync: false
+      - key: CONNECTOR_ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_DRIVE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_DRIVE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_DRIVE_REDIRECT_URI
+        sync: false

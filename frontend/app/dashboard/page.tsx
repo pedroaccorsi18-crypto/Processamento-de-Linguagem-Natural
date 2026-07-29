@@ -79,6 +79,7 @@ export default function DashboardPage() {
           title="Nenhuma inteligência carregada ainda."
           description="Conecte a base documental para exibir documentos, alertas e recomendações em tempo real."
           action="Ir para Base documental"
+          actionHref="/upload"
         />
       </SectionCard>
     </>

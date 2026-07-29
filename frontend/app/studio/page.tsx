@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 
@@ -26,12 +28,16 @@ export default function StudioPage() {
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {workflows.map((workflow) => (
-            <button
+            <Link
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-bold text-ink transition hover:border-synapse-blue hover:bg-blue-50"
+              href="/upload"
               key={workflow}
             >
-              {workflow}
-            </button>
+              <span className="block">{workflow}</span>
+              <span className="mt-2 block text-xs font-medium text-ink-soft">
+                Comece selecionando uma base documental.
+              </span>
+            </Link>
           ))}
         </div>
       </SectionCard>

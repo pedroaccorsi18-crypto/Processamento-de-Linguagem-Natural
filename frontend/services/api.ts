@@ -16,6 +16,7 @@ type CopilotResponse = {
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+const REQUEST_TIMEOUT_MS = 12_000;
 
 function apiEndpoint(path: string): string {
   if (!apiUrl) {
@@ -25,8 +26,24 @@ function apiEndpoint(path: string): string {
   return `${apiUrl.replace(/\/$/, "")}${path}`;
 }
 
+async function fetchApi(path: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(apiEndpoint(path), { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("A API demorou mais do que o esperado. Tente novamente em instantes.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const response = await fetch(apiEndpoint("/api/dashboard/stats"), {
+  const response = await fetchApi("/api/dashboard/stats", {
     headers: { Accept: "application/json" },
   });
 
@@ -42,7 +59,7 @@ export async function askCopilot(input: {
   currentArea: string;
   context: string;
 }): Promise<CopilotResponse> {
-  const response = await fetch(apiEndpoint("/api/copilot"), {
+  const response = await fetchApi("/api/copilot", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

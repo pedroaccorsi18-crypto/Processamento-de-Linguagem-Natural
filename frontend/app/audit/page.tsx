@@ -18,7 +18,8 @@ export default function AuditPage() {
         <EmptyState
           title="A trilha de auditoria ainda está vazia nesta nova interface."
           description="Depois que os endpoints de auditoria forem migrados, os registros aparecerão aqui com download e rastreabilidade."
-          action="Preparar exportação"
+          action="Explorar Estúdio de IA"
+          actionHref="/studio"
         />
       </SectionCard>
     </>

@@ -732,7 +732,10 @@ async def complete_slack_authorization(
         availability="available",
         connected=connection.connected,
         connected_at=connection.connected_at,
-        detail="Slack conectado com acesso somente leitura aos canais autorizados.",
+        detail=(
+            "Slack conectado com acesso somente leitura. Adicione o app Synapse AI "
+            "somente aos canais que deseja importar."
+        ),
     )
 
 
@@ -1394,7 +1397,8 @@ def _slack_status(request: AuthenticatedRequest) -> IntegrationStatusResponse:
         label="Slack",
         availability="available",
         detail=(
-            "Conecte uma área de trabalho para importar canais aos quais sua conta já tem acesso."
+            "Conecte uma área de trabalho e adicione o app Synapse AI apenas aos canais "
+            "que deseja importar."
         ),
     )
 

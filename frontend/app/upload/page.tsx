@@ -148,7 +148,7 @@ export default function UploadPage() {
           provider === "google_drive"
             ? "Google Drive conectado com sucesso. Escolha uma pasta para importar arquivos."
             : provider === "slack"
-              ? "Slack conectado com sucesso. Escolha os canais que deseja adicionar à base."
+              ? "Slack conectado com sucesso. Adicione o app Synapse AI aos canais desejados e escolha-os para importar."
               : "Microsoft 365 conectado com sucesso. Escolha conteúdo do Teams ou SharePoint.",
         );
         setError(null);
@@ -755,7 +755,7 @@ function SlackImportPanel({
   return (
     <SectionCard
       title="Importar do Slack"
-      description="Selecione canais que sua conta já pode acessar. O Synapse cria um registro privado por canal, sem publicar ou alterar mensagens."
+      description="Seleciona canais aos quais o app Synapse AI já foi adicionado. O Synapse cria um registro privado por canal, sem publicar ou alterar mensagens."
     >
       <button
         className="rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -763,7 +763,7 @@ function SlackImportPanel({
         onClick={() => void loadConversations()}
         type="button"
       >
-        {isLoading ? "Carregando canais..." : "Buscar canais autorizados"}
+        {isLoading ? "Carregando canais..." : "Buscar canais disponíveis"}
       </button>
       {conversations.length ? (
         <div className="mt-5 space-y-3">

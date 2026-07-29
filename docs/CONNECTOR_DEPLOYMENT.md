@@ -34,7 +34,7 @@ Configure no aplicativo Slack uma Redirect URL igual a `SLACK_REDIRECT_URI` e ap
 - `groups:history`
 - `files:read`
 
-Depois de alterar escopos, reinstale o aplicativo no workspace. Canais privados só aparecem se o aplicativo tiver sido adicionado a eles; isso é esperado e impede acesso involuntário.
+Depois de alterar escopos, reinstale o aplicativo no workspace. Adicione o app Synapse AI somente aos canais que deseja importar, inclusive os públicos. Canais privados só aparecem quando o aplicativo também é membro deles; isso é esperado e impede acesso involuntário.
 
 Variáveis do backend:
 

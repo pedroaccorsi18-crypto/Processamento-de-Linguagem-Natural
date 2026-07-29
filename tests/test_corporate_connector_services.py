@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from cryptography.fernet import Fernet
 
 from synapse_ai.services import microsoft_connection_service, slack_connection_service
@@ -20,6 +21,7 @@ from synapse_ai.services.slack_oauth_service import (
     exchange_slack_oauth_code,
 )
 from synapse_ai.services.slack_service import (
+    SlackConnectorError,
     SlackConversation,
     download_slack_conversation,
     list_slack_conversations,
@@ -95,6 +97,20 @@ def test_slack_exchange_and_channel_import_use_a_bearer_token() -> None:
     assert conversations == [SlackConversation("C1", "estrategia", False)]
     assert b"Decis" in downloaded.content
     assert connector_opener.requests[0].headers["Authorization"] == "Bearer slack-token"
+
+
+def test_slack_channel_without_app_membership_has_actionable_error() -> None:
+    opener = _Opener([b'{"ok": false, "error": "not_in_channel"}'])
+
+    with pytest.raises(
+        SlackConnectorError,
+        match="Adicione o app Synapse AI a este canal no Slack",
+    ):
+        download_slack_conversation(
+            slack_connection_service.SlackCredentials(access_token="slack-token"),
+            SlackConversation("C1", "estrategia", False),
+            opener=opener,
+        )
 
 
 def test_slack_connection_is_encrypted_for_one_user(monkeypatch) -> None:

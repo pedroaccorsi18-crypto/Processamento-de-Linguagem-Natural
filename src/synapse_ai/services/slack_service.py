@@ -123,6 +123,10 @@ def _request_json(
         raise SlackConnectorError("O Slack retornou uma resposta inesperada.")
     if payload.get("ok") is not True:
         error = str(payload.get("error") or "")
+        if error == "not_in_channel":
+            raise SlackConnectorError(
+                "Adicione o app Synapse AI a este canal no Slack e tente novamente."
+            )
         if error in {"missing_scope", "not_authed", "token_revoked", "invalid_auth"}:
             raise SlackConnectorError(
                 "A conexão do Slack não tem as permissões necessárias ou expirou. "

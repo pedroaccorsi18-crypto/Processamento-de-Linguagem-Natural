@@ -18,7 +18,7 @@ export default function AuditPage() {
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
-    listStudioHistory(session.access_token, 80)
+    listStudioHistory(session.access_token, 50)
       .then((entries) => {
         if (isMounted) {
           setHistory(entries);

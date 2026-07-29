@@ -197,7 +197,13 @@ async function fetchApi(
 
 async function responseError(response: Response, fallback: string): Promise<Error> {
   const payload = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-  return new Error(typeof payload?.detail === "string" ? payload.detail : fallback);
+  if (typeof payload?.detail === "string") {
+    return new Error(payload.detail);
+  }
+  if (Array.isArray(payload?.detail) && payload.detail.length > 0) {
+    return new Error(fallback);
+  }
+  return new Error(fallback);
 }
 
 export async function getDashboardStats(accessToken: string): Promise<DashboardStats> {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import backend.main as backend_main
+from backend.auth import AuthenticatedRequest
 from fastapi.testclient import TestClient
 
 from synapse_ai.config import (
@@ -10,6 +11,7 @@ from synapse_ai.config import (
     OpenAISettings,
     SupabaseSettings,
 )
+from synapse_ai.models.user import AuthenticatedUser
 
 
 def _config() -> AppConfig:
@@ -24,6 +26,14 @@ def _config() -> AppConfig:
     )
 
 
+def _authenticated_request() -> AuthenticatedRequest:
+    return AuthenticatedRequest(
+        user=AuthenticatedUser(id="user-1", email="user@example.com"),
+        client=object(),
+        config=_config(),
+    )
+
+
 def test_health_check() -> None:
     client = TestClient(backend_main.app)
 
@@ -33,10 +43,17 @@ def test_health_check() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_dashboard_stats_route_returns_contract() -> None:
+def test_dashboard_stats_route_returns_contract(monkeypatch) -> None:
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _authenticated_request
+    )
+    monkeypatch.setattr(backend_main, "list_user_documents", lambda *args: [])
     client = TestClient(backend_main.app)
 
-    response = client.get("/api/dashboard/stats")
+    try:
+        response = client.get("/api/dashboard/stats")
+    finally:
+        backend_main.app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json() == {
@@ -47,6 +64,14 @@ def test_dashboard_stats_route_returns_contract() -> None:
     }
 
 
+def test_document_routes_require_an_authenticated_session() -> None:
+    client = TestClient(backend_main.app)
+
+    response = client.get("/api/documents")
+
+    assert response.status_code == 401
+
+
 def test_copilot_route_returns_json(monkeypatch) -> None:
     observed: dict[str, object] = {}
 
@@ -55,7 +80,9 @@ def test_copilot_route_returns_json(monkeypatch) -> None:
         observed["kwargs"] = kwargs
         return "Resposta do Copiloto"
 
-    monkeypatch.setattr(backend_main, "load_backend_config", _config)
+    backend_main.app.dependency_overrides[backend_main.require_authenticated_request] = (
+        _authenticated_request
+    )
     monkeypatch.setattr(backend_main, "OpenAI", lambda api_key: object())
     monkeypatch.setattr(
         backend_main,
@@ -64,14 +91,17 @@ def test_copilot_route_returns_json(monkeypatch) -> None:
     )
     client = TestClient(backend_main.app)
 
-    response = client.post(
-        "/api/copilot",
-        json={
-            "prompt": "O que devo fazer agora?",
-            "current_area": "Dashboard",
-            "context": "Documentos recentes: nenhum.",
-        },
-    )
+    try:
+        response = client.post(
+            "/api/copilot",
+            json={
+                "prompt": "O que devo fazer agora?",
+                "current_area": "Dashboard",
+                "context": "Documentos recentes: nenhum.",
+            },
+        )
+    finally:
+        backend_main.app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json() == {"answer": "Resposta do Copiloto", "model": "gpt-test"}

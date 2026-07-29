@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useSynapseSession } from "@/components/auth-gate";
 import { askCopilot, type CopilotMessagePayload } from "@/services/api";
 
 const quickPrompts = [
@@ -10,6 +11,7 @@ const quickPrompts = [
 ];
 
 export function CopilotChat() {
+  const { session } = useSynapseSession();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<CopilotMessagePayload[]>([
     {
@@ -41,6 +43,7 @@ export function CopilotChat() {
 
     try {
       const data = await askCopilot({
+        accessToken: session.access_token,
         messages: nextMessages,
         currentArea: "Frontend Next.js",
         context:

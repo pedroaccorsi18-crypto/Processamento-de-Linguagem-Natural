@@ -78,6 +78,17 @@ def create_authenticated_supabase_connection(
     )
 
 
+def create_token_scoped_supabase_client(
+    config: AppConfig,
+    access_token: str,
+    client_factory: Callable[[str, str], Any] | None = None,
+) -> Any:
+    """Create a client whose database and storage calls honor the caller's RLS scope."""
+    client = create_supabase_client(config, client_factory)
+    client.options.headers["Authorization"] = f"Bearer {access_token}"
+    return client
+
+
 @lru_cache(maxsize=1)
 def get_supabase_client(url: str, publishable_key: str) -> Any:
     return _default_factory()(url, publishable_key)

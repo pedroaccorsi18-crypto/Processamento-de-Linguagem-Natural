@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSynapseSession } from "@/components/auth-gate";
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/kpi-card";
 import { PageHeader } from "@/components/page-header";
@@ -8,13 +9,14 @@ import { SectionCard } from "@/components/section-card";
 import { getDashboardStats, type DashboardStats } from "@/services/api";
 
 export default function DashboardPage() {
+  const { session } = useSynapseSession();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [hasLoadError, setHasLoadError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    getDashboardStats()
+    getDashboardStats(session.access_token)
       .then((nextStats) => {
         if (isMounted) {
           setStats(nextStats);
@@ -29,7 +31,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [session.access_token]);
 
   return (
     <>

@@ -60,6 +60,28 @@ def list_user_documents(client: Any, user_id: str, limit: int = 20) -> list[dict
     return data if isinstance(data, list) else []
 
 
+def get_user_document(client: Any, user_id: str, document_id: str) -> dict[str, Any] | None:
+    """Return one document only when it belongs to the authenticated user."""
+    try:
+        response = (
+            client.table("documents")
+            .select(
+                "id, user_id, filename, content_type, size_bytes, status, text_char_count, "
+                "storage_bucket, storage_path, metadata, created_at"
+            )
+            .eq("id", document_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Document lookup failed: %s", exc.__class__.__name__)
+        return None
+
+    data = getattr(response, "data", None)
+    return data if isinstance(data, dict) else None
+
+
 def update_document_storage_location(
     client: Any,
     user_id: str,

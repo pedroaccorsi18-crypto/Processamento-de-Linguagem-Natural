@@ -101,7 +101,8 @@ function AuditTimeline({ entries }: { entries: StudioHistoryEntry[] }) {
   return (
     <div className="space-y-4">
       {entries.map((entry) => (
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft-card" key={entry.id}>
+        <details className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft-card" key={entry.id}>
+          <summary className="cursor-pointer pr-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-lg font-black text-ink">{entry.title || "Análise salva"}</h3>
@@ -113,6 +114,9 @@ function AuditTimeline({ entries }: { entries: StudioHistoryEntry[] }) {
               {entry.status}
             </span>
           </div>
+          </summary>
+
+          <div className="mt-5 border-t border-slate-100 pt-5">
 
           {entry.question ? (
             <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-ink">
@@ -129,7 +133,7 @@ function AuditTimeline({ entries }: { entries: StudioHistoryEntry[] }) {
             className="mt-4 inline-flex text-sm font-bold text-synapse-blue hover:text-blue-800"
             href={`/studio?history=${encodeURIComponent(entry.id)}#history`}
           >
-            Abrir diagnóstico completo
+            Abrir diagnóstico de {entry.document_filename ?? "este escopo"}
           </Link>
 
           {entry.sources.length > 0 ? (
@@ -148,7 +152,8 @@ function AuditTimeline({ entries }: { entries: StudioHistoryEntry[] }) {
               Este registro não possui fontes salvas.
             </p>
           )}
-        </article>
+          </div>
+        </details>
       ))}
     </div>
   );

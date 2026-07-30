@@ -181,6 +181,9 @@ function RecentFindings({ entries }: { entries: StudioHistoryEntry[] }) {
             <p className="mt-3 line-clamp-3 text-sm leading-6 text-ink-soft">
               {entry.answer || entry.question || "Sem resumo textual disponível."}
             </p>
+            <p className="mt-3 text-xs font-bold text-synapse-blue">
+              Abrir diagnóstico de {entry.document_filename ?? "este escopo documental"}
+            </p>
           </Link>
         ))}
       </div>

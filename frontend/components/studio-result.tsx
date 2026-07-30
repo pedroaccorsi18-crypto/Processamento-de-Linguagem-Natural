@@ -79,17 +79,23 @@ export function StudioHistory({
   entries: StudioHistoryEntry[];
   highlightedEntryId?: string | null;
 }) {
-  if (entries.length === 0) {
+  const visibleEntries = highlightedEntryId
+    ? entries.filter((entry) => entry.id === highlightedEntryId)
+    : entries;
+
+  if (visibleEntries.length === 0) {
     return (
       <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-ink-soft">
-        Nenhuma análise foi salva por esta conta ainda.
+        {highlightedEntryId
+          ? "Este diagnóstico não está mais disponível no histórico da sua conta."
+          : "Nenhuma análise foi salva por esta conta ainda."}
       </p>
     );
   }
 
   return (
     <div className="space-y-3">
-      {entries.map((entry) => (
+      {visibleEntries.map((entry) => (
         <details
           className="rounded-xl border border-slate-200 bg-white p-4"
           id={`history-${entry.id}`}

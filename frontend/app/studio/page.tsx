@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { useSynapseSession } from "@/components/auth-gate";
@@ -415,7 +416,7 @@ export default function StudioPage() {
       {lastAnalysis ? <StudioResult analysis={lastAnalysis} /> : null}
 
       <SectionCard
-        title="Histórico de diagnósticos"
+        title={searchParams.has("history") ? "Diagnóstico selecionado" : "Histórico de diagnósticos"}
         description="Análises salvas por esta conta, com respostas e fontes preservadas para consulta posterior."
       >
         <details
@@ -428,6 +429,14 @@ export default function StudioPage() {
           </summary>
           <div className="mt-4">
             <StudioHistory entries={history} highlightedEntryId={searchParams.get("history")} />
+            {searchParams.has("history") ? (
+              <Link
+                className="mt-4 inline-flex text-sm font-bold text-synapse-blue hover:text-blue-800"
+                href="/studio#history"
+              >
+                Ver todo o histórico de diagnósticos
+              </Link>
+            ) : null}
           </div>
         </details>
       </SectionCard>

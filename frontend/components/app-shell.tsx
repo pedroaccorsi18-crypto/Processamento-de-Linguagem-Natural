@@ -100,10 +100,6 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-          <p className="font-semibold text-white">Copiloto ativo</p>
-          <p className="mt-2">Use o assistente para orientar a próxima decisão.</p>
-        </div>
       </aside>
 
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-ink px-4 py-4 text-white shadow-lg shadow-slate-950/5 lg:hidden">

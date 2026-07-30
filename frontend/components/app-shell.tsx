@@ -14,6 +14,11 @@ const navigationItems = [
   { href: "/studio", label: "Diagnóstico organizacional" },
 ];
 
+const secondaryNavigationItems = [
+  { href: "/insights", label: "Insights" },
+  { href: "/audit", label: "Evidências" },
+];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   if (
@@ -74,6 +79,26 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          <p className="mt-5 px-4 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+            Inteligência e rastreabilidade
+          </p>
+          {secondaryNavigationItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                aria-current={isActive ? "page" : undefined}
+                className={
+                  isActive
+                    ? "rounded-lg bg-white px-4 py-3 text-sm font-black text-ink"
+                    : "rounded-lg px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+                }
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
           <p className="font-semibold text-white">Copiloto ativo</p>
@@ -108,6 +133,23 @@ function AuthenticatedAppShell({ children }: { children: ReactNode }) {
                   isActive
                     ? "whitespace-nowrap rounded-lg bg-white px-3 py-2 text-xs font-black text-ink"
                     : "whitespace-nowrap rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-slate-100"
+                }
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+          {secondaryNavigationItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                aria-current={isActive ? "page" : undefined}
+                className={
+                  isActive
+                    ? "whitespace-nowrap rounded-lg bg-white px-3 py-2 text-xs font-black text-ink"
+                    : "whitespace-nowrap rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-slate-300"
                 }
                 href={item.href}
                 key={item.href}

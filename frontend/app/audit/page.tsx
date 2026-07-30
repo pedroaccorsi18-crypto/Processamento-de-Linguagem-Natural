@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/kpi-card";
@@ -123,6 +124,13 @@ function AuditTimeline({ entries }: { entries: StudioHistoryEntry[] }) {
           <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ink-soft">
             {entry.answer || "Resposta não registrada."}
           </p>
+
+          <Link
+            className="mt-4 inline-flex text-sm font-bold text-synapse-blue hover:text-blue-800"
+            href={`/studio?history=${encodeURIComponent(entry.id)}#history`}
+          >
+            Abrir diagnóstico completo
+          </Link>
 
           {entry.sources.length > 0 ? (
             <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">

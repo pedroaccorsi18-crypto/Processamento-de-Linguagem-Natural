@@ -11,9 +11,7 @@ import { CopilotChat } from "@/components/copilot-chat";
 const navigationItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/upload", label: "Base documental" },
-  { href: "/studio", label: "Estúdio de IA" },
-  { href: "/insights", label: "Insights" },
-  { href: "/audit", label: "Evidências" },
+  { href: "/studio", label: "Diagnóstico organizacional" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

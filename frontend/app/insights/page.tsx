@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/kpi-card";
@@ -161,7 +162,11 @@ function RecentFindings({ entries }: { entries: StudioHistoryEntry[] }) {
       <h3 className="text-base font-black text-ink">Achados recentes</h3>
       <div className="mt-4 space-y-3">
         {entries.map((entry) => (
-          <article className="rounded-xl border border-slate-200 bg-slate-50 p-4" key={entry.id}>
+          <Link
+            className="block rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-synapse-blue hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            href={`/studio?history=${encodeURIComponent(entry.id)}#history`}
+            key={entry.id}
+          >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h4 className="font-bold text-ink">{entry.title || "Análise salva"}</h4>
@@ -176,7 +181,7 @@ function RecentFindings({ entries }: { entries: StudioHistoryEntry[] }) {
             <p className="mt-3 line-clamp-3 text-sm leading-6 text-ink-soft">
               {entry.answer || entry.question || "Sem resumo textual disponível."}
             </p>
-          </article>
+          </Link>
         ))}
       </div>
     </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { useSynapseSession } from "@/components/auth-gate";
 import { EmptyState } from "@/components/empty-state";
@@ -24,7 +25,6 @@ type WorkflowDefinition = {
   description: string;
   minimumDocuments: number;
   needsQuestion?: boolean;
-  actionLabel: string;
 };
 
 const workflows: WorkflowDefinition[] = [
@@ -33,26 +33,24 @@ const workflows: WorkflowDefinition[] = [
     label: "Plano de ação",
     description: "Transforma decisões, riscos e pendências em ações acompanháveis.",
     minimumDocuments: 1,
-    actionLabel: "Gerar plano de ação",
   },
   {
     id: "sentiment_analysis",
     label: "Sentimentos organizacionais",
     description: "Avalia sinais de tom, tensão, confiança e risco no conteúdo.",
     minimumDocuments: 1,
-    actionLabel: "Analisar sentimentos",
   },
   {
     id: "preventive_alerts",
     label: "Alertas preventivos",
     description: "Antecipa riscos, prazos críticos e lacunas de acompanhamento.",
     minimumDocuments: 1,
-    actionLabel: "Gerar alertas preventivos",
   },
 ];
 
 export default function StudioPage() {
   const { session } = useSynapseSession();
+  const searchParams = useSearchParams();
   const [documents, setDocuments] = useState<StudioDocument[]>([]);
   const [history, setHistory] = useState<StudioHistoryEntry[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
@@ -187,9 +185,9 @@ export default function StudioPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Inteligência aplicada"
-        title="Estúdio de IA"
-        description="Defina um escopo privado, prepare a busca semântica e gere os três fluxos centrais de PLN: plano de ação, sentimentos e alertas preventivos."
+        eyebrow="Diagnóstico assistido"
+        title="Diagnóstico Organizacional"
+        description="Defina um escopo privado, prepare a busca semântica e gere um diagnóstico com plano de ação, sentimentos e alertas preventivos."
       />
 
       {error ? (
@@ -240,7 +238,14 @@ export default function StudioPage() {
             </div>
           ) : null}
           {!isLoading && documents.length > 0 ? (
-            <div className="mt-5 space-y-3">
+            <details className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <summary className="cursor-pointer text-sm font-bold text-ink">
+                Selecionar documentos ({documents.length})
+                <span className="ml-2 text-xs font-medium text-ink-soft">
+                  {selectedDocumentIds.length} no escopo atual
+                </span>
+              </summary>
+              <div className="mt-4 space-y-3">
               {documents.map((document) => {
                 const isSelected = selectedDocumentIds.includes(document.id);
                 return (
@@ -282,7 +287,8 @@ export default function StudioPage() {
                   </label>
                 );
               })}
-            </div>
+              </div>
+            </details>
           ) : null}
         </SectionCard>
 
@@ -387,7 +393,7 @@ export default function StudioPage() {
         </label>
 
         <button
-          className="mt-5 rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mx-auto mt-5 block rounded-xl bg-synapse-blue px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={
             activeOperation !== null ||
             !hasEnoughDocuments ||
@@ -397,7 +403,7 @@ export default function StudioPage() {
           onClick={() => void handleRunAnalysis()}
           type="button"
         >
-          {activeOperation === "analysis" ? "A IA está analisando o escopo..." : workflowDefinition.actionLabel}
+          {activeOperation === "analysis" ? "A IA está analisando o escopo..." : "Gerar Diagnóstico"}
         </button>
         {activeOperation === "analysis" ? (
           <p className="mt-3 text-sm font-semibold text-synapse-blue" role="status">
@@ -409,10 +415,21 @@ export default function StudioPage() {
       {lastAnalysis ? <StudioResult analysis={lastAnalysis} /> : null}
 
       <SectionCard
-        title="Histórico do Estúdio"
+        title="Histórico de diagnósticos"
         description="Análises salvas por esta conta, com respostas e fontes preservadas para consulta posterior."
       >
-        <StudioHistory entries={history} />
+        <details
+          className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+          id="history"
+          open={searchParams.has("history")}
+        >
+          <summary className="cursor-pointer text-sm font-bold text-ink">
+            Ver diagnósticos salvos ({history.length})
+          </summary>
+          <div className="mt-4">
+            <StudioHistory entries={history} highlightedEntryId={searchParams.get("history")} />
+          </div>
+        </details>
       </SectionCard>
     </>
   );

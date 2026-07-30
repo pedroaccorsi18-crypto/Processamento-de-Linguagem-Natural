@@ -72,7 +72,13 @@ export function StudioResult({ analysis }: { analysis: StudioAnalysisResponse })
   );
 }
 
-export function StudioHistory({ entries }: { entries: StudioHistoryEntry[] }) {
+export function StudioHistory({
+  entries,
+  highlightedEntryId,
+}: {
+  entries: StudioHistoryEntry[];
+  highlightedEntryId?: string | null;
+}) {
   if (entries.length === 0) {
     return (
       <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-ink-soft">
@@ -84,7 +90,12 @@ export function StudioHistory({ entries }: { entries: StudioHistoryEntry[] }) {
   return (
     <div className="space-y-3">
       {entries.map((entry) => (
-        <details className="rounded-xl border border-slate-200 bg-white p-4" key={entry.id}>
+        <details
+          className="rounded-xl border border-slate-200 bg-white p-4"
+          id={`history-${entry.id}`}
+          key={entry.id}
+          open={entry.id === highlightedEntryId}
+        >
           <summary className="cursor-pointer list-none pr-8 text-sm font-bold text-ink">
             {entry.title}
             <span className="mt-1 block text-xs font-medium text-ink-soft">
